@@ -1,0 +1,317 @@
+import { useQuery } from '@tanstack/react-query';
+import {
+  BarChart, Bar, LineChart, Line, PieChart, Pie, Cell,
+  XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
+} from 'recharts';
+import * as dashboardService from '@/services/dashboard.service';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { PageLoader } from '@/components/common/LoadingSpinner';
+import {
+  Clock, AlertTriangle, CheckCircle, TrendingUp, TrendingDown,
+  DollarSign, AlertOctagon, Users,
+} from 'lucide-react';
+import { formatHoursDecimal, formatCLP } from '@/utils/formatters';
+import { useAuth } from '@/context/AuthContext';
+
+// ─── Colores consistentes ─────────────────────────────────────────────────────
+const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4'];
+const TYPE_COLORS = { 'Horas extras': '#3b82f6', 'Super extras': '#f59e0b', 'Especiales': '#ef4444' };
+
+// ─── KPI Card ─────────────────────────────────────────────────────────────────
+const KpiCard = ({ title, value, subtitle, icon: Icon, iconColor = 'text-blue-500', trend }) => (
+  <Card>
+    <CardHeader className="flex flex-row items-center justify-between pb-2">
+      <CardTitle className="text-sm font-medium text-muted-foreground">{title}</CardTitle>
+      <Icon className={`h-4 w-4 ${iconColor}`} />
+    </CardHeader>
+    <CardContent>
+      <p className="text-3xl font-bold">{value}</p>
+      <div className="flex items-center gap-1 mt-1">
+        {trend !== null && trend !== undefined && (
+          <span className={`text-xs font-medium flex items-center gap-0.5 ${parseFloat(trend) > 0 ? 'text-red-500' : 'text-emerald-500'}`}>
+            {parseFloat(trend) > 0 ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
+            {Math.abs(parseFloat(trend))}%
+          </span>
+        )}
+        {subtitle && <p className="text-xs text-muted-foreground">{subtitle}</p>}
+      </div>
+    </CardContent>
+  </Card>
+);
+
+// ─── Tooltip personalizado ────────────────────────────────────────────────────
+const CustomTooltip = ({ active, payload, label }) => {
+  if (!active || !payload?.length) return null;
+  return (
+    <div className="rounded-lg border bg-white p-3 shadow-lg text-sm">
+      <p className="font-semibold mb-1">{label}</p>
+      {payload.map((p) => (
+        <p key={p.name} style={{ color: p.color }}>
+          {p.name}: <strong>{typeof p.value === 'number' && p.name.toLowerCase().includes('hora') ? p.value.toFixed(1) : p.value}</strong>
+        </p>
+      ))}
+    </div>
+  );
+};
+
+// ─── Página principal ─────────────────────────────────────────────────────────
+export default function Dashboard() {
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'administrador';
+  const isJefaturaOrAdmin = ['jefatura', 'administrador'].includes(user?.role);
+
+  const { data: kpis, isLoading: kpisLoading } = useQuery({
+    queryKey: ['dashboard-kpis'],
+    queryFn: dashboardService.getKpis,
+    refetchInterval: 60_000,
+  });
+
+  const { data: trend = [] } = useQuery({
+    queryKey: ['dashboard-trend'],
+    queryFn: dashboardService.getMonthlyTrend,
+    enabled: isJefaturaOrAdmin,
+  });
+
+  const { data: byCostCenter = [] } = useQuery({
+    queryKey: ['dashboard-cc'],
+    queryFn: dashboardService.getByCostCenter,
+    enabled: isJefaturaOrAdmin,
+  });
+
+  const { data: topEmployees = [] } = useQuery({
+    queryKey: ['dashboard-top'],
+    queryFn: dashboardService.getTopEmployees,
+    enabled: isJefaturaOrAdmin,
+  });
+
+  const { data: byType = [] } = useQuery({
+    queryKey: ['dashboard-type'],
+    queryFn: dashboardService.getByType,
+    enabled: isJefaturaOrAdmin,
+  });
+
+  const { data: costProj } = useQuery({
+    queryKey: ['dashboard-cost'],
+    queryFn: dashboardService.getCostProjection,
+    enabled: isAdmin,
+  });
+
+  if (kpisLoading) return <PageLoader />;
+
+  const approvalRate = kpis
+    ? kpis.approvedMonth + kpis.pendingCount > 0
+      ? Math.round(kpis.approvedMonth / (kpis.approvedMonth + kpis.pendingCount) * 100)
+      : 0
+    : 0;
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div>
+        <h1 className="text-2xl font-bold">Dashboard</h1>
+        <p className="text-muted-foreground text-sm mt-0.5">
+          Bienvenido/a, {user?.firstName}. Indicadores del mes en curso.
+        </p>
+      </div>
+
+      {/* KPIs */}
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <KpiCard
+          title="Horas este mes"
+          value={formatHoursDecimal(kpis?.monthHours)}
+          icon={Clock}
+          iconColor="text-blue-500"
+          trend={kpis?.trend}
+          subtitle={kpis?.trend ? 'vs. mes anterior' : 'primer mes'}
+        />
+        <KpiCard
+          title="Registros pendientes"
+          value={kpis?.pendingCount ?? 0}
+          icon={AlertTriangle}
+          iconColor="text-amber-500"
+          subtitle="requieren acción"
+        />
+        <KpiCard
+          title="Aprobados este mes"
+          value={kpis?.approvedMonth ?? 0}
+          icon={CheckCircle}
+          iconColor="text-emerald-500"
+          subtitle={`${approvalRate}% tasa de aprobación`}
+        />
+        <KpiCard
+          title={isAdmin ? 'Registros retenidos' : 'Con alertas'}
+          value={isAdmin ? (kpis?.retainedCount ?? 0) : (kpis?.alertsCount ?? 0)}
+          icon={isAdmin ? AlertOctagon : TrendingUp}
+          iconColor={isAdmin ? 'text-red-500' : 'text-purple-500'}
+          subtitle={isAdmin ? 'exceden límite mensual' : 'este mes'}
+        />
+      </div>
+
+      {/* Proyección de costo — solo admin */}
+      {isAdmin && costProj && (
+        <Card className="border-blue-100 bg-blue-50">
+          <CardContent className="flex items-center gap-4 p-4">
+            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-blue-100">
+              <DollarSign className="h-6 w-6 text-blue-600" />
+            </div>
+            <div>
+              <p className="text-sm text-muted-foreground">Proyección de costo — {costProj.month}</p>
+              <p className="text-2xl font-bold text-blue-700">{formatCLP(costProj.totalCostCLP)}</p>
+              <p className="text-xs text-muted-foreground">Basado en horas aprobadas + pendientes × tarifa por empleado</p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Gráficos — solo jefatura y admin */}
+      {isJefaturaOrAdmin && (
+        <>
+          {/* Tendencia mensual */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Evolución últimos 6 meses</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {trend.length === 0 ? (
+                <div className="flex items-center justify-center h-32 text-muted-foreground text-sm">Sin datos suficientes</div>
+              ) : (
+                <ResponsiveContainer width="100%" height={220}>
+                  <LineChart data={trend} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                    <XAxis dataKey="month" tick={{ fontSize: 11 }} />
+                    <YAxis tick={{ fontSize: 11 }} />
+                    <Tooltip content={<CustomTooltip />} />
+                    <Legend wrapperStyle={{ fontSize: 12 }} />
+                    <Line type="monotone" dataKey="horas" name="Horas" stroke="#3b82f6" strokeWidth={2} dot={{ r: 4 }} />
+                    <Line type="monotone" dataKey="aprobados" name="Aprobados" stroke="#10b981" strokeWidth={2} strokeDasharray="5 5" dot={{ r: 3 }} />
+                  </LineChart>
+                </ResponsiveContainer>
+              )}
+            </CardContent>
+          </Card>
+
+          <div className="grid gap-4 lg:grid-cols-2">
+            {/* Horas por centro de costo */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">Horas por tipo de trabajo — mes actual</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {byCostCenter.length === 0 ? (
+                  <div className="flex items-center justify-center h-32 text-muted-foreground text-sm">Sin datos este mes</div>
+                ) : (
+                  <ResponsiveContainer width="100%" height={220}>
+                    <BarChart data={byCostCenter} layout="vertical" margin={{ left: 20, right: 20 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" horizontal={false} />
+                      <XAxis type="number" tick={{ fontSize: 11 }} />
+                      <YAxis dataKey="name" type="category" tick={{ fontSize: 11 }} width={100} />
+                      <Tooltip content={<CustomTooltip />} />
+                      <Bar dataKey="horas" name="Horas" fill="#3b82f6" radius={[0, 4, 4, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Distribución por tipo de hora */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">Distribución por tipo — mes actual</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {byType.length === 0 ? (
+                  <div className="flex items-center justify-center h-32 text-muted-foreground text-sm">Sin datos este mes</div>
+                ) : (
+                  <div className="flex items-center gap-4">
+                    <ResponsiveContainer width="60%" height={200}>
+                      <PieChart>
+                        <Pie data={byType} dataKey="horas" nameKey="name" cx="50%" cy="50%" outerRadius={80} label={({ percent }) => `${(percent * 100).toFixed(0)}%`} labelLine={false}>
+                          {byType.map((entry, i) => (
+                            <Cell key={entry.name} fill={TYPE_COLORS[entry.name] ?? COLORS[i % COLORS.length]} />
+                          ))}
+                        </Pie>
+                        <Tooltip formatter={(v) => [`${v.toFixed(1)} hrs`, 'Horas']} />
+                      </PieChart>
+                    </ResponsiveContainer>
+                    <div className="flex flex-col gap-2 flex-1">
+                      {byType.map((t, i) => (
+                        <div key={t.name} className="flex items-center gap-2">
+                          <div className="h-3 w-3 rounded-full shrink-0" style={{ background: TYPE_COLORS[t.name] ?? COLORS[i % COLORS.length] }} />
+                          <div className="flex-1 min-w-0">
+                            <p className="text-xs font-medium truncate">{t.name}</p>
+                            <p className="text-xs text-muted-foreground">{t.horas.toFixed(1)} hrs · {t.registros} reg.</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Top empleados */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base flex items-center gap-2">
+                <Users className="h-4 w-4" /> Top empleados por horas — mes actual
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {topEmployees.length === 0 ? (
+                <div className="flex items-center justify-center h-20 text-muted-foreground text-sm">Sin datos este mes</div>
+              ) : (
+                <div className="space-y-2">
+                  {topEmployees.map((emp, i) => (
+                    <div key={emp.name} className="flex items-center gap-3">
+                      <span className="text-xs font-bold text-muted-foreground w-5 text-right">{i + 1}</span>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between mb-0.5">
+                          <span className="text-sm font-medium truncate">{emp.name}</span>
+                          <div className="flex items-center gap-2 shrink-0 ml-2">
+                            {emp.alertas > 0 && (
+                              <Badge variant="warning" className="text-[10px] py-0">{emp.alertas} alertas</Badge>
+                            )}
+                            <span className="text-sm font-bold">{emp.horas.toFixed(1)} hrs</span>
+                          </div>
+                        </div>
+                        <div className="h-1.5 rounded-full bg-gray-100 overflow-hidden">
+                          <div
+                            className="h-full rounded-full bg-blue-500 transition-all"
+                            style={{ width: `${Math.min(100, (emp.horas / (topEmployees[0]?.horas || 1)) * 100)}%` }}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </>
+      )}
+
+      {/* Funcionario: vista simplificada */}
+      {!isJefaturaOrAdmin && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm text-muted-foreground">Tu actividad este mes</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <p className="text-xs text-muted-foreground">Horas registradas</p>
+                <p className="text-2xl font-bold">{formatHoursDecimal(kpis?.monthHours)}</p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Registros pendientes</p>
+                <p className="text-2xl font-bold">{kpis?.pendingCount ?? 0}</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+    </div>
+  );
+}
