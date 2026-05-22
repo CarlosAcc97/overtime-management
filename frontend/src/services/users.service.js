@@ -49,3 +49,8 @@ export const updateSystemConfig = async (config) => {
   const { data } = await api.put('/config', config);
   return data.data.config;
 };
+
+export const changeMyPassword = async ({ currentPassword, newPassword }) => {
+  const { data } = await api.post('/users/me/change-password', { currentPassword, newPassword });
+  return data;
+};

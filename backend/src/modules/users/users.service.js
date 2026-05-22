@@ -156,6 +156,19 @@ export const toggleActive = async (id, isActive) => {
   return findById(id);
 };
 
+export const changeMyPassword = async (userId, currentPassword, newPassword) => {
+  const [user] = await db.select({ id: users.id, passwordHash: users.passwordHash })
+    .from(users).where(eq(users.id, userId)).limit(1);
+  if (!user) throw createError('Usuario no encontrado', 404);
+
+  const valid = await bcrypt.compare(currentPassword, user.passwordHash);
+  if (!valid) throw createError('La contraseña actual es incorrecta', 400);
+
+  const hash = await bcrypt.hash(newPassword, authConfig.bcryptRounds);
+  await db.update(users).set({ passwordHash: hash, updatedAt: new Date().toISOString() })
+    .where(eq(users.id, userId));
+};
+
 export const findSupervisors = async () => {
   return db.select({ id: users.id, firstName: users.firstName, lastName: users.lastName, email: users.email, role: users.role })
     .from(users)

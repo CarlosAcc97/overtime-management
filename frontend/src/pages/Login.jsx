@@ -115,13 +115,6 @@ export default function Login() {
             </Button>
           </form>
 
-          {/* Credenciales de demo */}
-          <div className="mt-6 rounded-lg bg-muted p-3 text-xs">
-            <p className="mb-1.5 font-semibold text-muted-foreground">Acceso de administrador:</p>
-            <div className="space-y-0.5 text-muted-foreground">
-              <p><span className="font-medium">Admin:</span> admin@cooprel.cl / Admin2024!</p>
-            </div>
-          </div>
         </CardContent>
       </Card>
 

@@ -7,6 +7,7 @@ const router = Router();
 
 router.use(authenticate);
 
+router.post('/me/change-password', anyRole, usersController.changeMyPassword);
 router.get('/', onlyJefaturaOrAdmin, usersController.getAll);
 router.get('/supervisors', anyRole, usersController.getSupervisors);
 router.get('/my-team', onlyJefaturaOrAdmin, usersController.getTeam);

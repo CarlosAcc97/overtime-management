@@ -81,3 +81,14 @@ export const getSupervisors = async (req, res) => {
   const supervisors = await usersService.findSupervisors();
   ok(res, { supervisors });
 };
+
+export const changeMyPassword = async (req, res) => {
+  const { currentPassword, newPassword } = z.object({
+    currentPassword: z.string().min(1, 'Ingresa tu contraseña actual'),
+    newPassword: z.string().min(8, 'La nueva contraseña debe tener al menos 8 caracteres'),
+  }).parse(req.body);
+
+  await usersService.changeMyPassword(req.user.id, currentPassword, newPassword);
+  await logAudit({ userId: req.user.id, action: 'user.change_password', entityType: 'user', entityId: req.user.id, req });
+  ok(res, {}, 'Contraseña actualizada correctamente');
+};
