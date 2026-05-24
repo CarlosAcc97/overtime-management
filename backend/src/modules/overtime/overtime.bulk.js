@@ -104,27 +104,28 @@ router.get('/template', authenticate, onlyAdmin, async (req, res) => {
   const allBorders = { top: thin, left: thin, bottom: thin, right: thin };
 
   // Fila 1: Título
-  ws.mergeCells('A1:G1');
+  ws.mergeCells('A1:H1');
   ws.getCell('A1').value = 'PLANTILLA DE CARGA MASIVA — HORAS EXTRAS';
   ws.getCell('A1').font  = titleFont;
   ws.getCell('A1').alignment = { horizontal: 'center' };
 
   // Fila 2: instrucciones
-  ws.mergeCells('A2:G2');
-  ws.getCell('A2').value = 'Ingrese los datos desde la fila 4. Use la hoja "Valores válidos" para los códigos de Tipo y Centro de Costo. Columnas A o B son obligatorias (al menos una).';
+  ws.mergeCells('A2:H2');
+  ws.getCell('A2').value = 'Ingrese los datos desde la fila 4. Consulte la hoja "Funcionarios" para copiar nombres, RUT y email. Use "Valores válidos" para códigos de Tipo y Centro de Costo. Columnas B o C son obligatorias (al menos una).';
   ws.getCell('A2').font  = { italic: true, size: 9, color: { argb: 'FF6b7280' } };
   ws.getCell('A2').alignment = { horizontal: 'center', wrapText: true };
   ws.getRow(2).height = 28;
 
   // Fila 3: Encabezados de columna
   const COLS = [
-    { header: 'RUT *',              key: 'rut',        width: 18, note: 'RUT del funcionario (ej: 12.345.678-9). Requerido si no se ingresa Email.' },
-    { header: 'Email *',            key: 'email',      width: 32, note: 'Email del funcionario (ej: jessica.alvarez@distrib.cl). Requerido si no se ingresa RUT.' },
-    { header: 'Fecha *',            key: 'fecha',      width: 14, note: 'Formato DD/MM/AAAA (ej: 21/05/2026).' },
-    { header: 'Hora Inicio *',      key: 'inicio',     width: 14, note: 'Formato HH:MM en 24 horas (ej: 18:00).' },
-    { header: 'Hora Término *',     key: 'termino',    width: 14, note: 'Formato HH:MM en 24 horas (ej: 20:30).' },
-    { header: 'Tipo Hora Extra *',  key: 'tipo',       width: 20, note: 'Código del tipo. Ver hoja "Valores válidos".' },
-    { header: 'Centro de Costo *',  key: 'cc',         width: 20, note: 'Código del centro. Ver hoja "Valores válidos".' },
+    { header: 'Nombre Funcionario',  key: 'nombre',    width: 30, note: 'Nombre del funcionario (referencia). No es usado para identificar — use RUT o Email.' },
+    { header: 'RUT *',               key: 'rut',       width: 18, note: 'RUT del funcionario (ej: 12.345.678-9). Requerido si no se ingresa Email.' },
+    { header: 'Email *',             key: 'email',     width: 32, note: 'Email del funcionario (ej: jessica.alvarez@distrib.cl). Requerido si no se ingresa RUT.' },
+    { header: 'Fecha *',             key: 'fecha',     width: 14, note: 'Formato DD/MM/AAAA (ej: 21/05/2026).' },
+    { header: 'Hora Inicio *',       key: 'inicio',    width: 14, note: 'Formato HH:MM en 24 horas (ej: 18:00).' },
+    { header: 'Hora Término *',      key: 'termino',   width: 14, note: 'Formato HH:MM en 24 horas (ej: 20:30).' },
+    { header: 'Tipo Hora Extra *',   key: 'tipo',      width: 20, note: 'Código del tipo. Ver hoja "Valores válidos".' },
+    { header: 'Centro de Costo *',   key: 'cc',        width: 20, note: 'Código del centro. Ver hoja "Valores válidos".' },
   ];
 
   ws.columns = COLS.map(c => ({ key: c.key, width: c.width }));
@@ -143,8 +144,8 @@ router.get('/template', authenticate, onlyAdmin, async (req, res) => {
 
   // Filas de ejemplo (fila 4 y 5)
   const examples = [
-    ['12.345.678-9', 'jessica.alvarez@distrib.cl', '21/05/2026', '18:00', '20:00', 'extra',       'TER'],
-    [null,           'julio.valdes@distrib.cl',     '21/05/2026', '19:00', '21:30', 'super_extra',  'ADM'],
+    ['Jessica Álvarez',  '12.345.678-9', 'jessica.alvarez@distrib.cl', '21/05/2026', '18:00', '20:00', 'extra',       'TER'],
+    ['Julio Valdés',     null,           'julio.valdes@distrib.cl',    '21/05/2026', '19:00', '21:30', 'super_extra', 'ADM'],
   ];
   examples.forEach((ex, rowIdx) => {
     const row = ws.getRow(4 + rowIdx);
@@ -154,8 +155,8 @@ router.get('/template', authenticate, onlyAdmin, async (req, res) => {
       cell.fill   = exFill;
       cell.border = allBorders;
       cell.alignment = { vertical: 'middle' };
-      // Columnas de hora: formato texto
-      if (colIdx === 3 || colIdx === 4) cell.numFmt = '@';
+      // Columnas de hora (E y F, índices 4 y 5): formato texto
+      if (colIdx === 4 || colIdx === 5) cell.numFmt = '@';
     });
     row.height = 18;
   });
@@ -163,26 +164,28 @@ router.get('/template', authenticate, onlyAdmin, async (req, res) => {
   // Filas vacías para ingresar datos (6–205: 200 filas)
   for (let r = 6; r <= 205; r++) {
     const row = ws.getRow(r);
-    for (let c = 1; c <= 7; c++) {
+    for (let c = 1; c <= 8; c++) {
       const cell = row.getCell(c);
-      cell.fill   = c <= 2 ? optFill : reqFill;
+      // Col A (nombre), B (rut), C (email): fondo verde claro (opcional/referencia)
+      cell.fill   = c <= 3 ? optFill : reqFill;
       cell.border = allBorders;
-      if (c === 4 || c === 5) cell.numFmt = '@'; // horas como texto
+      // Cols E y F (hora inicio/término): formato texto
+      if (c === 5 || c === 6) cell.numFmt = '@';
     }
     row.height = 18;
   }
 
-  // Validaciones de lista para Tipo y Centro de Costo
-  const typeCodes  = typeList.map(t => t.code).join(',');
-  const ccCodes    = ccList.map(c => c.code).join(',');
+  // Validaciones de lista para Tipo (col G) y Centro de Costo (col H)
+  const typeCodes = typeList.map(t => t.code).join(',');
+  const ccCodes   = ccList.map(c => c.code).join(',');
   for (let r = 4; r <= 205; r++) {
-    ws.getCell(`F${r}`).dataValidation = {
+    ws.getCell(`G${r}`).dataValidation = {
       type: 'list', allowBlank: true,
       formulae: [`"${typeCodes}"`],
       showErrorMessage: true, errorTitle: 'Valor inválido',
       error: `Usa uno de: ${typeCodes}`,
     };
-    ws.getCell(`G${r}`).dataValidation = {
+    ws.getCell(`H${r}`).dataValidation = {
       type: 'list', allowBlank: true,
       formulae: [`"${ccCodes}"`],
       showErrorMessage: true, errorTitle: 'Valor inválido',
