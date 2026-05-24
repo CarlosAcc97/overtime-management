@@ -97,6 +97,27 @@ async function runMigrations() {
       console.warn(`   ⚠️  Config default omitido (${key}): ${e.message}`);
     }
   }
+
+  // 3. Limpieza única de registros de prueba (corre una sola vez)
+  try {
+    const check = await client.execute({
+      sql: `SELECT value FROM system_config WHERE key = 'data_reset_v1'`,
+      args: [],
+    });
+    if (check.rows.length === 0) {
+      console.log('   🧹 Ejecutando limpieza de registros de prueba...');
+      await client.execute('DELETE FROM approvals');
+      await client.execute('DELETE FROM alert_logs');
+      await client.execute('DELETE FROM overtime_records');
+      await client.execute({
+        sql: `INSERT INTO system_config (key, value) VALUES ('data_reset_v1', '1')`,
+        args: [],
+      });
+      console.log('   ✅ Limpieza completada — base de datos lista para producción');
+    }
+  } catch (e) {
+    console.warn(`   ⚠️  Error en limpieza: ${e.message}`);
+  }
 }
 
 app.listen(PORT, async () => {
