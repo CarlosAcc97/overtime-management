@@ -175,10 +175,21 @@ router.get('/template', authenticate, onlyAdmin, async (req, res) => {
     row.height = 18;
   }
 
-  // Validaciones de lista para Tipo (col G) y Centro de Costo (col H)
-  const typeCodes = typeList.map(t => t.code).join(',');
-  const ccCodes   = ccList.map(c => c.code).join(',');
+  // Validaciones de lista para Tipo (col G), Centro de Costo (col H) y Nombre Funcionario (col A)
+  const typeCodes   = typeList.map(t => t.code).join(',');
+  const ccCodes     = ccList.map(c => c.code).join(',');
+  const lastUserRow = userList.length + 1; // fila final de datos en hoja Funcionarios
   for (let r = 4; r <= 205; r++) {
+    // Col A: dropdown con nombres completos desde hoja Funcionarios
+    if (userList.length > 0) {
+      ws.getCell(`A${r}`).dataValidation = {
+        type: 'list', allowBlank: true,
+        formulae: [`Funcionarios!$A$2:$A$${lastUserRow}`],
+        showErrorMessage: true, errorStyle: 'warning',
+        errorTitle: 'Nombre no encontrado',
+        error: 'El nombre no está en la lista de funcionarios. Puedes igualmente continuar — el sistema identifica al funcionario por RUT o Email.',
+      };
+    }
     ws.getCell(`G${r}`).dataValidation = {
       type: 'list', allowBlank: true,
       formulae: [`"${typeCodes}"`],
@@ -214,26 +225,26 @@ router.get('/template', authenticate, onlyAdmin, async (req, res) => {
   wsRef.columns.forEach(c => { wsRef.getColumn(c.key).width = c.width; });
 
   // ── Hoja 3: Nómina de funcionarios ──────────────────────────────────────────
+  // Col A = Nombre Completo (usado como origen del dropdown en la plantilla)
   const wsUsers = wb.addWorksheet('Funcionarios');
   wsUsers.columns = [
-    { header: 'ID Empleado', key: 'eid',   width: 14 },
-    { header: 'Apellidos',   key: 'last',  width: 26 },
-    { header: 'Nombres',     key: 'first', width: 22 },
-    { header: 'Email',       key: 'email', width: 38 },
-    { header: 'RUT',         key: 'rut',   width: 16 },
+    { header: 'Nombre Completo', key: 'nombre', width: 36 },
+    { header: 'ID Empleado',     key: 'eid',    width: 14 },
+    { header: 'Email',           key: 'email',  width: 38 },
+    { header: 'RUT',             key: 'rut',    width: 16 },
   ];
-  [1,2,3,4,5].forEach(i => {
+  [1,2,3,4].forEach(i => {
     const cell = wsUsers.getRow(1).getCell(i);
     cell.font = headerFont; cell.fill = headerFill; cell.border = allBorders;
     cell.alignment = { horizontal: 'center' };
   });
   userList.forEach((u, i) => {
     const row = wsUsers.getRow(i + 2);
-    row.values = [u.employeeId || '', u.lastName, u.firstName, u.email, u.rut || ''];
+    row.values = [`${u.firstName} ${u.lastName}`, u.employeeId || '', u.email, u.rut || ''];
     if (i % 2 === 0) {
-      [1,2,3,4,5].forEach(c => { row.getCell(c).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFf8fafc' } }; });
+      [1,2,3,4].forEach(c => { row.getCell(c).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFf8fafc' } }; });
     }
-    [1,2,3,4,5].forEach(c => { row.getCell(c).border = allBorders; });
+    [1,2,3,4].forEach(c => { row.getCell(c).border = allBorders; });
   });
 
   // ── Enviar ──────────────────────────────────────────────────────────────────
