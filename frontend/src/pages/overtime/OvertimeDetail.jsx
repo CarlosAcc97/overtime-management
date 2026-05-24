@@ -76,12 +76,6 @@ export default function OvertimeDetail() {
           <div className="flex items-center gap-2 mt-1 flex-wrap">
             <StatusBadge status={record.status} />
             {record.alertLevel > 0 && <AlertBadge level={record.alertLevel} />}
-            {record.requiresDoubleValidation && (
-              <Badge variant="outline">Doble validación</Badge>
-            )}
-            {record.firstApprovalBy && record.status === 'PENDIENTE' && (
-              <Badge variant="outline" className="text-blue-700 border-blue-300">1ª aprobación OK — esperando 2ª</Badge>
-            )}
           </div>
         </div>
         {canEdit && (

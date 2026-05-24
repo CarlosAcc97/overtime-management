@@ -23,7 +23,7 @@ import {
 } from '@/components/ui/select';
 import {
   CheckSquare, XCircle, MessageSquare, Eye, RefreshCw,
-  AlertTriangle, Clock, CheckCircle, Calendar, Shield, Tag,
+  AlertTriangle, Clock, CheckCircle, Calendar, Tag,
 } from 'lucide-react';
 import { formatHoursDecimal, formatOvertimeType, formatStatus } from '@/utils/formatters';
 import { useAuth } from '@/context/AuthContext';
@@ -59,7 +59,6 @@ const alertBorderClass = (level) => {
 
 const ApproveDialog = ({ record, onClose, onSuccess }) => {
   const needsExcess = record.alertLevel >= 1;
-  const isSecondApproval = record.requiresDoubleValidation && record.firstApprovalBy;
 
   const { register, handleSubmit, watch, setValue, formState: { errors, isSubmitting } } = useForm({
     resolver: zodResolver(approveSchema),
@@ -74,7 +73,7 @@ const ApproveDialog = ({ record, onClose, onSuccess }) => {
     mutationFn: (data) => approvalService.approveRecord(record.id, data),
     onSuccess: (updated) => {
       toast({
-        title: isSecondApproval ? 'Segunda validación completada' : 'Registro aprobado',
+        title: 'Registro aprobado',
         description: `Horas extras del ${record.date} aprobadas correctamente.`,
         variant: 'success',
       });
@@ -89,21 +88,12 @@ const ApproveDialog = ({ record, onClose, onSuccess }) => {
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <CheckCircle className="h-5 w-5 text-emerald-600" />
-            {isSecondApproval ? 'Segunda validación' : 'Aprobar registro'}
+            Aprobar registro
           </DialogTitle>
           <DialogDescription>
             {record.user?.firstName} {record.user?.lastName} — {record.date} · {record.startTime}–{record.endTime} · {formatHoursDecimal(record.hoursCalculated)}
           </DialogDescription>
         </DialogHeader>
-
-        {isSecondApproval && (
-          <Alert>
-            <Shield className="h-4 w-4" />
-            <AlertDescription className="text-sm">
-              Este registro ya tiene una primera aprobación. Como segunda validación, estás completando el proceso de doble aprobación.
-            </AlertDescription>
-          </Alert>
-        )}
 
         {record.alertLevel >= 1 && (
           <Alert variant="warning">
@@ -180,7 +170,7 @@ const ApproveDialog = ({ record, onClose, onSuccess }) => {
             <Button type="button" variant="outline" onClick={onClose}>Cancelar</Button>
             <Button type="submit" className="bg-emerald-600 hover:bg-emerald-700" disabled={isSubmitting || mutation.isPending}>
               <CheckCircle className="mr-2 h-4 w-4" />
-              {mutation.isPending ? 'Aprobando...' : (isSecondApproval ? 'Completar validación' : 'Aprobar')}
+              {mutation.isPending ? 'Aprobando...' : 'Aprobar'}
             </Button>
           </DialogFooter>
         </form>
@@ -341,19 +331,6 @@ export default function ApprovalInbox() {
               </div>
             </CardContent>
           </Card>
-          {user?.role === 'administrador' && (
-            <Card className="col-span-2 sm:col-span-1">
-              <CardContent className="p-4">
-                <div className="flex items-center gap-3">
-                  <Shield className="h-8 w-8 text-blue-500 shrink-0" />
-                  <div>
-                    <p className="text-2xl font-bold">{stats.needsSecondApproval}</p>
-                    <p className="text-xs text-muted-foreground">2ª validación</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          )}
         </div>
       )}
 
@@ -406,11 +383,6 @@ export default function ApprovalInbox() {
                     <td className="px-4 py-3">
                       <div className="font-medium">{r.user?.firstName} {r.user?.lastName}</div>
                       <div className="text-xs text-muted-foreground">{r.user?.employeeId || r.user?.email}</div>
-                      {r.requiresDoubleValidation && (
-                        <Badge variant="outline" className="text-[10px] mt-0.5">
-                          {r.firstApprovalBy ? '2ª validación' : 'Doble validación'}
-                        </Badge>
-                      )}
                     </td>
                     <td className="px-4 py-3">
                       <div className="font-medium">

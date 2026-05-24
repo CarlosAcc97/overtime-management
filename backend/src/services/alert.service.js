@@ -78,21 +78,18 @@ export const calculateAlertLevel = async (userId, dateStr, hoursCalculated, excl
   const newMonthly = monthlyHours + hoursCalculated;
 
   let alertLevel = ALERT_LEVELS.NORMAL;
-  let requiresDoubleValidation = false;
 
   if (newMonthly > maxMonthly) {
     alertLevel = ALERT_LEVELS.CRITICA;
-    requiresDoubleValidation = true;
   } else if (hoursCalculated > maxDailyWarning || newWeekly > maxWeekly) {
     alertLevel = ALERT_LEVELS.ADVERTENCIA;
-    requiresDoubleValidation = true;
   } else if (hoursCalculated > maxDailySoft) {
     alertLevel = ALERT_LEVELS.INFORMATIVA;
   }
 
   return {
     alertLevel,
-    requiresDoubleValidation,
+    requiresDoubleValidation: false,
     weeklyHours: newWeekly,
     monthlyHours: newMonthly,
     thresholds: { maxDailySoft, maxDailyWarning, maxWeekly, maxMonthly },

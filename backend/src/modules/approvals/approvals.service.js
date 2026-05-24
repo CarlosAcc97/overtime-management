@@ -156,54 +156,17 @@ export const approve = async (overtimeId, data, requester, ip) => {
     }
   }
 
-  // ── Flujo de doble validación ──────────────────────────────────────────────
-  const needsDouble = record.requiresDoubleValidation;
-  const hasFirstApproval = !!record.firstApprovalBy;
-  let newStatus = STATUS.APROBADO;
-  let approvalLevel = 1;
+  // ── Aprobación simple (sin doble validación) ──────────────────────────────
+  const newStatus = STATUS.APROBADO;
+  const approvalLevel = 1;
 
-  if (needsDouble && !hasFirstApproval) {
-    // Primera aprobación: jefatura firma, espera segunda
-    newStatus = STATUS.PENDIENTE; // sigue pendiente de 2da validación
-    approvalLevel = 1;
-
-    await db.update(overtimeRecords).set({
-      firstApprovalBy: requester.id,
-      firstApprovalAt: new Date().toISOString(),
-      activityCategory: activityCategory,
-      activityDescription: activityDescription.trim(),
-      excessJustification: excessJustification?.trim() || null,
-      updatedAt: new Date().toISOString(),
-    }).where(eq(overtimeRecords.id, parseInt(overtimeId)));
-
-  } else if (needsDouble && hasFirstApproval && record.firstApprovalBy !== requester.id) {
-    // Segunda aprobación: diferente aprobador, completa el flujo
-    approvalLevel = 2;
-    newStatus = STATUS.APROBADO;
-
-    await db.update(overtimeRecords).set({
-      status: STATUS.APROBADO,
-      activityCategory: activityCategory,
-      activityDescription: activityDescription.trim(),
-      excessJustification: excessJustification?.trim() || null,
-      updatedAt: new Date().toISOString(),
-    }).where(eq(overtimeRecords.id, parseInt(overtimeId)));
-
-  } else if (needsDouble && hasFirstApproval && record.firstApprovalBy === requester.id) {
-    throw createError('El mismo aprobador no puede realizar ambas validaciones del proceso de doble validación', 409);
-
-  } else {
-    // Aprobación simple (sin doble validación)
-    newStatus = STATUS.APROBADO;
-
-    await db.update(overtimeRecords).set({
-      status: STATUS.APROBADO,
-      activityCategory: activityCategory,
-      activityDescription: activityDescription.trim(),
-      excessJustification: excessJustification?.trim() || null,
-      updatedAt: new Date().toISOString(),
-    }).where(eq(overtimeRecords.id, parseInt(overtimeId)));
-  }
+  await db.update(overtimeRecords).set({
+    status: STATUS.APROBADO,
+    activityCategory: activityCategory,
+    activityDescription: activityDescription.trim(),
+    excessJustification: excessJustification?.trim() || null,
+    updatedAt: new Date().toISOString(),
+  }).where(eq(overtimeRecords.id, parseInt(overtimeId)));
 
   // Registrar aprobación
   await db.insert(approvals).values({
