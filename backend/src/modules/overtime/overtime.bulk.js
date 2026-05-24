@@ -111,7 +111,7 @@ router.get('/template', authenticate, onlyAdmin, async (req, res) => {
 
   // Fila 2: instrucciones
   ws.mergeCells('A2:H2');
-  ws.getCell('A2').value = 'Ingrese los datos desde la fila 4. Consulte la hoja "Funcionarios" para copiar nombres, RUT y email. Use "Valores válidos" para códigos de Tipo y Centro de Costo. Columnas B o C son obligatorias (al menos una).';
+  ws.getCell('A2').value = 'Seleccione el nombre del funcionario en columna A — el RUT y Email se completarán automáticamente. También puede ingresar RUT o Email directamente sin usar la columna A. Use "Valores válidos" para códigos de Tipo y Centro de Costo. Columna B o C es obligatoria.';
   ws.getCell('A2').font  = { italic: true, size: 9, color: { argb: 'FF6b7280' } };
   ws.getCell('A2').alignment = { horizontal: 'center', wrapText: true };
   ws.getRow(2).height = 28;
@@ -162,15 +162,22 @@ router.get('/template', authenticate, onlyAdmin, async (req, res) => {
   });
 
   // Filas vacías para ingresar datos (6–205: 200 filas)
+  // Cols B (RUT) y C (Email) tienen VLOOKUP que auto-rellena al seleccionar nombre en col A
   for (let r = 6; r <= 205; r++) {
     const row = ws.getRow(r);
     for (let c = 1; c <= 8; c++) {
       const cell = row.getCell(c);
-      // Col A (nombre), B (rut), C (email): fondo verde claro (opcional/referencia)
       cell.fill   = c <= 3 ? optFill : reqFill;
       cell.border = allBorders;
-      // Cols E y F (hora inicio/término): formato texto
       if (c === 5 || c === 6) cell.numFmt = '@';
+      // Col B (RUT): se autocompleta buscando el nombre en hoja Funcionarios col D
+      if (c === 2 && userList.length > 0) {
+        cell.value = { formula: `IF(A${r}="","",IFERROR(VLOOKUP(A${r},Funcionarios!$A:$D,4,0),""))`, result: '' };
+      }
+      // Col C (Email): se autocompleta buscando el nombre en hoja Funcionarios col C
+      if (c === 3 && userList.length > 0) {
+        cell.value = { formula: `IF(A${r}="","",IFERROR(VLOOKUP(A${r},Funcionarios!$A:$C,3,0),""))`, result: '' };
+      }
     }
     row.height = 18;
   }
