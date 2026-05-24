@@ -4,7 +4,7 @@ import { useForm } from 'react-hook-form';
 import {
   FileSpreadsheet, Printer, RefreshCw, Download,
   Users, Clock, DollarSign, FileText,
-  ChevronLeft, ChevronRight, CalendarDays, X,
+  ChevronLeft, ChevronRight, CalendarDays, X, Search,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -15,7 +15,6 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Badge } from '@/components/ui/badge';
 import { toast } from '@/hooks/use-toast';
 import * as reportsService from '@/services/reports.service';
-import { getUsers } from '@/services/users.service';
 import { Building2 } from 'lucide-react';
 import { formatCLP, formatHoursDecimal, formatOvertimeType } from '@/utils/formatters';
 import { StatusBadge, AlertBadge } from '@/components/common/StatusBadge';
@@ -384,16 +383,10 @@ export default function Reports() {
   const [filters, setFilters]               = useState({});
   const [isDownloading, setIsDownloading]   = useState(false);
   const [selectedEmployee, setSelectedEmployee] = useState(null);
+  const [nameSearch, setNameSearch]         = useState('');
 
-  const { register, handleSubmit, watch, setValue } = useForm({
-    defaultValues: { dateFrom: '', dateTo: '', status: '', userId: '', departmentId: '' },
-  });
-
-  const { data: usersData } = useQuery({
-    queryKey: ['users-list'],
-    queryFn: () => getUsers({ isActive: true }),
-    enabled: isAdmin,
-    select: (d) => d?.data?.users ?? [],
+  const { register, handleSubmit, setValue } = useForm({
+    defaultValues: { dateFrom: '', dateTo: '', status: '', departmentId: '' },
   });
 
   const { data: departmentsData = [] } = useQuery({
@@ -412,10 +405,9 @@ export default function Reports() {
   // ── Filtros ────────────────────────────────────────────────────────────────
   const onSubmit = (values) => {
     const clean = {};
-    if (values.dateFrom)    clean.dateFrom    = values.dateFrom;
-    if (values.dateTo)      clean.dateTo      = values.dateTo;
-    if (values.status)      clean.status      = values.status;
-    if (values.userId)      clean.userId      = values.userId;
+    if (values.dateFrom)     clean.dateFrom     = values.dateFrom;
+    if (values.dateTo)       clean.dateTo       = values.dateTo;
+    if (values.status)       clean.status       = values.status;
     if (values.departmentId) clean.departmentId = values.departmentId;
     setFilters(clean);
   };
@@ -444,8 +436,13 @@ export default function Reports() {
     }
   };
 
-  const totals    = summary?.totals;
-  const employees = summary?.employees ?? [];
+  const totals = summary?.totals;
+  const allEmployees = summary?.employees ?? [];
+  const employees = nameSearch.trim()
+    ? allEmployees.filter(e =>
+        e.name?.toLowerCase().includes(nameSearch.trim().toLowerCase())
+      )
+    : allEmployees;
 
   return (
     <div className="space-y-6 print:space-y-4">
@@ -533,24 +530,27 @@ export default function Reports() {
                 </SelectContent>
               </Select>
             </div>
-            {isAdmin && (
-              <div className="space-y-1.5">
-                <Label className="text-xs">Funcionario</Label>
-                <Select onValueChange={(v) => setValue('userId', v === '_all_' ? '' : v)} defaultValue="">
-                  <SelectTrigger className="h-9 text-sm">
-                    <SelectValue placeholder="Todos" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="_all_">Todos los funcionarios</SelectItem>
-                    {(usersData ?? []).map((u) => (
-                      <SelectItem key={u.id} value={String(u.id)}>
-                        {u.firstName} {u.lastName}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Buscar funcionario</Label>
+              <div className="relative">
+                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
+                <Input
+                  placeholder="Nombre o apellido..."
+                  className="h-9 text-sm pl-8"
+                  value={nameSearch}
+                  onChange={(e) => setNameSearch(e.target.value)}
+                />
+                {nameSearch && (
+                  <button
+                    type="button"
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                    onClick={() => setNameSearch('')}
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                )}
               </div>
-            )}
+            </div>
             <div className="flex items-end gap-2">
               <Button type="submit" size="sm" className="h-9 flex-1">
                 <RefreshCw className="h-3.5 w-3.5 mr-1.5" /> Aplicar
@@ -559,8 +559,8 @@ export default function Reports() {
                 type="button" variant="ghost" size="sm" className="h-9"
                 onClick={() => {
                   setValue('dateFrom', '');  setValue('dateTo', '');
-                  setValue('status', '');    setValue('userId', '');
-                  setValue('departmentId', '');
+                  setValue('status', '');    setValue('departmentId', '');
+                  setNameSearch('');
                   setFilters({});
                 }}
               >
@@ -586,9 +586,9 @@ export default function Reports() {
         <CardHeader className="pb-3">
           <CardTitle className="text-base flex items-center gap-2">
             Resumen por funcionario
-            {employees.length > 0 && (
+            {allEmployees.length > 0 && (
               <span className="text-sm font-normal text-muted-foreground">
-                ({employees.length} persona{employees.length !== 1 ? 's' : ''})
+                ({employees.length}{employees.length !== allEmployees.length ? ` de ${allEmployees.length}` : ''} persona{employees.length !== 1 ? 's' : ''})
               </span>
             )}
             <span className="ml-auto text-xs font-normal text-muted-foreground hidden sm:block">
