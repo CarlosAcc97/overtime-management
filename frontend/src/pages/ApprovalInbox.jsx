@@ -40,10 +40,6 @@ const ACTIVITY_CATEGORIES = [
 // ─── Esquemas de validación ───────────────────────────────────────────────────
 const approveSchema = z.object({
   activityCategory: z.string().min(1, 'Selecciona una categoría'),
-  activityDescription: z
-    .string()
-    .min(20, 'La descripción de la actividad debe tener al menos 20 caracteres')
-    .max(1000, 'Máximo 1000 caracteres'),
   excessJustification: z.string().optional(),
   comment: z.string().min(10, 'El comentario es obligatorio (mínimo 10 caracteres)'),
 });
@@ -68,7 +64,6 @@ const ApproveDialog = ({ record, onClose, onSuccess }) => {
     resolver: zodResolver(approveSchema),
     defaultValues: {
       activityCategory: '',
-      activityDescription: '',
       excessJustification: '',
       comment: '',
     },
@@ -125,11 +120,11 @@ const ApproveDialog = ({ record, onClose, onSuccess }) => {
         )}
 
         <form onSubmit={handleSubmit((d) => mutation.mutate(d))} className="space-y-4">
-          {/* Categoría de actividad */}
+          {/* Detalle de la actividad — lista desplegable */}
           <div className="space-y-1">
             <Label className="flex items-center gap-1">
               <Tag className="h-3.5 w-3.5" />
-              Categoría de la actividad *
+              Detalle de la actividad *
             </Label>
             <Select onValueChange={(val) => setValue('activityCategory', val, { shouldValidate: true })}>
               <SelectTrigger className={errors.activityCategory ? 'border-destructive' : ''}>
@@ -144,24 +139,6 @@ const ApproveDialog = ({ record, onClose, onSuccess }) => {
             {errors.activityCategory && (
               <p className="text-xs text-destructive">{errors.activityCategory.message}</p>
             )}
-          </div>
-
-          {/* Descripción de la actividad */}
-          <div className="space-y-1">
-            <Label>
-              Detalle de la actividad *
-              <span className="ml-1 text-xs font-normal text-muted-foreground">(mínimo 20 caracteres)</span>
-            </Label>
-            <Textarea
-              {...register('activityDescription')}
-              placeholder="Describe la actividad realizada durante las horas extras..."
-              rows={3}
-              className={errors.activityDescription ? 'border-destructive' : ''}
-            />
-            <div className="flex justify-between">
-              {errors.activityDescription && <p className="text-xs text-destructive">{errors.activityDescription.message}</p>}
-              <span className="text-xs text-muted-foreground ml-auto">{watch('activityDescription')?.length ?? 0}/1000</span>
-            </div>
           </div>
 
           {/* Justificación de exceso — solo si hay alerta */}

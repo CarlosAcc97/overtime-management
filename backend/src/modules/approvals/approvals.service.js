@@ -136,7 +136,8 @@ export const getApprovalHistory = async (overtimeId) => {
 
 // ─── Aprobar ──────────────────────────────────────────────────────────────────
 export const approve = async (overtimeId, data, requester, ip) => {
-  const { activityCategory, activityDescription, excessJustification, comment } = data;
+  const { activityCategory, excessJustification, comment } = data;
+  const activityDescription = activityCategory; // la categoría es el detalle de la actividad
 
   const [record] = await db.select().from(overtimeRecords).where(eq(overtimeRecords.id, parseInt(overtimeId))).limit(1);
   if (!record) throw createError('Registro no encontrado', 404);
