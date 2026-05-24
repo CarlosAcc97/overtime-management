@@ -50,12 +50,13 @@ export const NOTIFICATION_TYPES = {
 // ─── Configuración por defecto del sistema ────────────────────────────────────
 // Los factores ya NO están aquí — viven en la tabla overtime_types
 export const DEFAULT_CONFIG = {
-  max_daily_hours_soft: '2',       // tope diario nivel 1 (alerta amarilla)
-  max_daily_hours_warning: '3',    // tope diario nivel 2 (alerta roja)
-  max_weekly_hours: '12',          // tope semanal (Art. 31 CT Chile)
-  max_monthly_hours: '40',         // tope mensual → estado RETENIDO
-  default_hourly_rate: '5000',     // valor hora base en CLP (para proyecciones)
-  pending_alert_hours: '48',       // alerta si pendiente > N horas
+  max_daily_hours_soft: '2',          // tope diario nivel 1 (alerta amarilla)
+  max_daily_hours_warning: '3',       // tope diario nivel 2 (alerta roja)
+  max_weekly_hours: '12',             // tope semanal (Art. 31 CT Chile)
+  max_monthly_hours: '40',            // tope mensual → estado RETENIDO
+  default_hourly_rate: '5000',        // valor hora base en CLP (para proyecciones)
+  pending_alert_hours: '48',          // alerta si pendiente > N horas
+  min_minutes_for_approval: '15',     // mínimo de minutos para requerir aprobación de jefatura
 };
 
 // ─── Zona horaria del sistema ─────────────────────────────────────────────────

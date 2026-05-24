@@ -7,7 +7,7 @@ import { getWeekRange, getMonthRange } from '../utils/dateHelpers.js';
 /**
  * Obtiene el valor de configuración del sistema como número
  */
-const getConfigValue = async (key, defaultValue) => {
+export const getConfigValue = async (key, defaultValue) => {
   const [row] = await db.select().from(systemConfig).where(eq(systemConfig.key, key)).limit(1);
   return row ? parseFloat(row.value) : defaultValue;
 };

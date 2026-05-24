@@ -3,7 +3,7 @@ import { overtimeRecords, overtimeTypes, users, costCenters } from '../../db/sch
 import { eq, and, or, gte, lte, ne, notInArray, desc, sql } from 'drizzle-orm';
 import { createError } from '../../middleware/errorHandler.js';
 import { calcHours, daysFromToday, timesOverlap } from '../../utils/dateHelpers.js';
-import { calculateAlertLevel, saveAlertLog } from '../../services/alert.service.js';
+import { calculateAlertLevel, saveAlertLog, getConfigValue } from '../../services/alert.service.js';
 import { STATUS, ALERT_LEVELS, ROLES } from '../../config/constants.js';
 import { logAudit } from '../../middleware/auditLogger.js';
 import { notifyRetained } from '../../services/notification.service.js';
@@ -141,8 +141,18 @@ export const create = async (data, requester, ip) => {
   const alertResult = await calculateAlertLevel(userId, date, hoursCalculated);
   const { alertLevel, requiresDoubleValidation, weeklyHours, monthlyHours } = alertResult;
 
-  // ── Determinar estado inicial (RETENIDO si excede límite mensual) ──
-  const status = alertLevel === ALERT_LEVELS.CRITICA ? STATUS.RETENIDO : STATUS.PENDIENTE;
+  // ── Determinar estado inicial ──
+  // Si el registro es CRÍTICO → RETENIDO (límite mensual superado)
+  // Si las horas son menores al mínimo configurado → APROBADO automáticamente
+  // De lo contrario → PENDIENTE (requiere aprobación de jefatura)
+  const minMinutes = await getConfigValue('min_minutes_for_approval', 15);
+  const minutesCalculated = Math.round(hoursCalculated * 60);
+  const isAutoApproved = alertLevel !== ALERT_LEVELS.CRITICA && minutesCalculated < minMinutes;
+  const status = alertLevel === ALERT_LEVELS.CRITICA
+    ? STATUS.RETENIDO
+    : isAutoApproved
+      ? STATUS.APROBADO
+      : STATUS.PENDIENTE;
 
   const [record] = await db.insert(overtimeRecords).values({
     userId,

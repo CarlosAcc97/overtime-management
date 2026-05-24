@@ -18,9 +18,10 @@ const configSchema = z.object({
   max_daily_hours_soft:    z.coerce.number().min(0.5).max(12, 'Máximo 12 hrs').step ? z.coerce.number().min(0.5).max(12) : z.coerce.number().min(0.5).max(12),
   max_daily_hours_warning: z.coerce.number().min(0.5).max(24, 'Máximo 24 hrs'),
   max_weekly_hours:        z.coerce.number().min(1).max(60, 'Máximo 60 hrs'),
-  max_monthly_hours:       z.coerce.number().min(1).max(200, 'Máximo 200 hrs'),
-  default_hourly_rate:     z.coerce.number().min(100, 'Mínimo $100'),
-  pending_alert_hours:     z.coerce.number().min(1).max(168, 'Máximo 168 hrs (1 semana)'),
+  max_monthly_hours:         z.coerce.number().min(1).max(200, 'Máximo 200 hrs'),
+  default_hourly_rate:       z.coerce.number().min(100, 'Mínimo $100'),
+  pending_alert_hours:       z.coerce.number().min(1).max(168, 'Máximo 168 hrs (1 semana)'),
+  min_minutes_for_approval:  z.coerce.number().min(1, 'Mínimo 1 minuto').max(120, 'Máximo 120 minutos'),
 }).superRefine((d, ctx) => {
   if (d.max_daily_hours_warning <= d.max_daily_hours_soft) {
     ctx.addIssue({
@@ -84,6 +85,13 @@ const CONFIG_GROUPS = [
     description: 'Valores por defecto del sistema.',
     fields: [
       {
+        key: 'min_minutes_for_approval',
+        label: 'Mínimo para requerir aprobación',
+        description: 'Registros con menos minutos que este valor se aprueban automáticamente sin pasar por jefatura.',
+        unit: 'minutos',
+        min: 1, max: 120, step: 1,
+      },
+      {
         key: 'default_hourly_rate',
         label: 'Valor hora predeterminado (CLP)',
         description: 'Se usa cuando el funcionario no tiene tarifa asignada en su perfil.',
@@ -117,6 +125,7 @@ export default function SystemConfig() {
       max_daily_hours_warning: 3,
       max_weekly_hours:        12,
       max_monthly_hours:       40,
+      min_minutes_for_approval: 15,
       default_hourly_rate:     5000,
       pending_alert_hours:     48,
     },
@@ -126,12 +135,13 @@ export default function SystemConfig() {
   useEffect(() => {
     if (config) {
       reset({
-        max_daily_hours_soft:    parseFloat(config.max_daily_hours_soft    ?? 2),
-        max_daily_hours_warning: parseFloat(config.max_daily_hours_warning ?? 3),
-        max_weekly_hours:        parseFloat(config.max_weekly_hours        ?? 12),
-        max_monthly_hours:       parseFloat(config.max_monthly_hours       ?? 40),
-        default_hourly_rate:     parseFloat(config.default_hourly_rate     ?? 5000),
-        pending_alert_hours:     parseFloat(config.pending_alert_hours     ?? 48),
+        max_daily_hours_soft:     parseFloat(config.max_daily_hours_soft     ?? 2),
+        max_daily_hours_warning:  parseFloat(config.max_daily_hours_warning  ?? 3),
+        max_weekly_hours:         parseFloat(config.max_weekly_hours         ?? 12),
+        max_monthly_hours:        parseFloat(config.max_monthly_hours        ?? 40),
+        min_minutes_for_approval: parseFloat(config.min_minutes_for_approval ?? 15),
+        default_hourly_rate:      parseFloat(config.default_hourly_rate      ?? 5000),
+        pending_alert_hours:      parseFloat(config.pending_alert_hours      ?? 48),
       });
     }
   }, [config, reset]);

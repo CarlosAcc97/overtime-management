@@ -70,19 +70,31 @@ app.use((req, res) => {
 
 // ─── Iniciar servidor ─────────────────────────────────────────────────────────
 async function runMigrations() {
-  const migrations = [
+  // 1. ALTER TABLE migrations
+  const ddl = [
     'ALTER TABLE overtime_records ADD COLUMN activity_category TEXT',
   ];
-  for (const sql of migrations) {
+  for (const sql of ddl) {
     try {
       await client.execute(sql);
-      console.log(`   ✅ Migración: ${sql.slice(0, 60)}...`);
+      console.log(`   ✅ DDL: ${sql.slice(0, 60)}`);
     } catch (e) {
-      if (e.message?.includes('duplicate column') || e.message?.includes('already exists')) {
-        // columna ya existe, ok
-      } else {
-        console.warn(`   ⚠️  Migración omitida: ${e.message}`);
+      if (!e.message?.includes('duplicate column') && !e.message?.includes('already exists')) {
+        console.warn(`   ⚠️  DDL omitido: ${e.message}`);
       }
+    }
+  }
+
+  // 2. Insertar valores por defecto en system_config si aún no existen
+  const { DEFAULT_CONFIG } = await import('./config/constants.js');
+  for (const [key, value] of Object.entries(DEFAULT_CONFIG)) {
+    try {
+      await client.execute({
+        sql: `INSERT OR IGNORE INTO system_config (key, value) VALUES (?, ?)`,
+        args: [key, value],
+      });
+    } catch (e) {
+      console.warn(`   ⚠️  Config default omitido (${key}): ${e.message}`);
     }
   }
 }
