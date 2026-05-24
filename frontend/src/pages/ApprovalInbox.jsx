@@ -19,14 +19,27 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from '@/components/ui/dialog';
 import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from '@/components/ui/select';
+import {
   CheckSquare, XCircle, MessageSquare, Eye, RefreshCw,
-  AlertTriangle, Clock, CheckCircle, Calendar, Shield,
+  AlertTriangle, Clock, CheckCircle, Calendar, Shield, Tag,
 } from 'lucide-react';
 import { formatHoursDecimal, formatOvertimeType, formatStatus } from '@/utils/formatters';
 import { useAuth } from '@/context/AuthContext';
 
+// ─── Categorías de actividad ──────────────────────────────────────────────────
+const ACTIVITY_CATEGORIES = [
+  'Trabajo Administrativo',
+  'Contingencia',
+  'Atención de Reclamo',
+  'Planificación Deficiente',
+  'Requerimientos Urgentes',
+];
+
 // ─── Esquemas de validación ───────────────────────────────────────────────────
 const approveSchema = z.object({
+  activityCategory: z.string().min(1, 'Selecciona una categoría'),
   activityDescription: z
     .string()
     .min(20, 'La descripción de la actividad debe tener al menos 20 caracteres')
@@ -51,9 +64,10 @@ const ApproveDialog = ({ record, onClose, onSuccess }) => {
   const needsExcess = record.alertLevel >= 1;
   const isSecondApproval = record.requiresDoubleValidation && record.firstApprovalBy;
 
-  const { register, handleSubmit, watch, formState: { errors, isSubmitting } } = useForm({
+  const { register, handleSubmit, watch, setValue, formState: { errors, isSubmitting } } = useForm({
     resolver: zodResolver(approveSchema),
     defaultValues: {
+      activityCategory: '',
       activityDescription: '',
       excessJustification: '',
       comment: '',
@@ -111,6 +125,27 @@ const ApproveDialog = ({ record, onClose, onSuccess }) => {
         )}
 
         <form onSubmit={handleSubmit((d) => mutation.mutate(d))} className="space-y-4">
+          {/* Categoría de actividad */}
+          <div className="space-y-1">
+            <Label className="flex items-center gap-1">
+              <Tag className="h-3.5 w-3.5" />
+              Categoría de la actividad *
+            </Label>
+            <Select onValueChange={(val) => setValue('activityCategory', val, { shouldValidate: true })}>
+              <SelectTrigger className={errors.activityCategory ? 'border-destructive' : ''}>
+                <SelectValue placeholder="Selecciona el motivo de la hora extra..." />
+              </SelectTrigger>
+              <SelectContent>
+                {ACTIVITY_CATEGORIES.map((cat) => (
+                  <SelectItem key={cat} value={cat}>{cat}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {errors.activityCategory && (
+              <p className="text-xs text-destructive">{errors.activityCategory.message}</p>
+            )}
+          </div>
+
           {/* Descripción de la actividad */}
           <div className="space-y-1">
             <Label>

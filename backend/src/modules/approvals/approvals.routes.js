@@ -9,7 +9,18 @@ const router = Router();
 router.use(authenticate);
 
 // ─── Validadores ──────────────────────────────────────────────────────────────
+const ACTIVITY_CATEGORIES = [
+  'Trabajo Administrativo',
+  'Contingencia',
+  'Atención de Reclamo',
+  'Planificación Deficiente',
+  'Requerimientos Urgentes',
+];
+
 const approveSchema = z.object({
+  activityCategory: z.enum(ACTIVITY_CATEGORIES, {
+    errorMap: () => ({ message: 'Selecciona una categoría de actividad' }),
+  }),
   activityDescription: z
     .string()
     .min(20, 'La descripción de la actividad debe tener al menos 20 caracteres')

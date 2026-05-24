@@ -5,6 +5,7 @@ import helmet from 'helmet';
 import morgan from 'morgan';
 import cookieParser from 'cookie-parser';
 
+import { client } from './config/database.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import authRoutes from './modules/auth/auth.routes.js';
 import usersRoutes from './modules/users/users.routes.js';
@@ -68,10 +69,30 @@ app.use((req, res) => {
 });
 
 // ─── Iniciar servidor ─────────────────────────────────────────────────────────
-app.listen(PORT, () => {
+async function runMigrations() {
+  const migrations = [
+    'ALTER TABLE overtime_records ADD COLUMN activity_category TEXT',
+  ];
+  for (const sql of migrations) {
+    try {
+      await client.execute(sql);
+      console.log(`   ✅ Migración: ${sql.slice(0, 60)}...`);
+    } catch (e) {
+      if (e.message?.includes('duplicate column') || e.message?.includes('already exists')) {
+        // columna ya existe, ok
+      } else {
+        console.warn(`   ⚠️  Migración omitida: ${e.message}`);
+      }
+    }
+  }
+}
+
+app.listen(PORT, async () => {
   console.log(`\n🚀 Servidor iniciado en http://localhost:${PORT}`);
   console.log(`   Entorno: ${process.env.NODE_ENV || 'development'}`);
-  console.log(`   DB: ${process.env.DATABASE_URL || './data/overtime.db'}\n`);
+  console.log(`   DB: ${process.env.DATABASE_URL || './data/overtime.db'}`);
+  await runMigrations();
+  console.log();
 });
 
 export default app;

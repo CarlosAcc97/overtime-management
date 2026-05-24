@@ -136,7 +136,7 @@ export const getApprovalHistory = async (overtimeId) => {
 
 // ─── Aprobar ──────────────────────────────────────────────────────────────────
 export const approve = async (overtimeId, data, requester, ip) => {
-  const { activityDescription, excessJustification, comment } = data;
+  const { activityCategory, activityDescription, excessJustification, comment } = data;
 
   const [record] = await db.select().from(overtimeRecords).where(eq(overtimeRecords.id, parseInt(overtimeId))).limit(1);
   if (!record) throw createError('Registro no encontrado', 404);
@@ -169,6 +169,7 @@ export const approve = async (overtimeId, data, requester, ip) => {
     await db.update(overtimeRecords).set({
       firstApprovalBy: requester.id,
       firstApprovalAt: new Date().toISOString(),
+      activityCategory: activityCategory,
       activityDescription: activityDescription.trim(),
       excessJustification: excessJustification?.trim() || null,
       updatedAt: new Date().toISOString(),
@@ -181,6 +182,7 @@ export const approve = async (overtimeId, data, requester, ip) => {
 
     await db.update(overtimeRecords).set({
       status: STATUS.APROBADO,
+      activityCategory: activityCategory,
       activityDescription: activityDescription.trim(),
       excessJustification: excessJustification?.trim() || null,
       updatedAt: new Date().toISOString(),
@@ -195,6 +197,7 @@ export const approve = async (overtimeId, data, requester, ip) => {
 
     await db.update(overtimeRecords).set({
       status: STATUS.APROBADO,
+      activityCategory: activityCategory,
       activityDescription: activityDescription.trim(),
       excessJustification: excessJustification?.trim() || null,
       updatedAt: new Date().toISOString(),

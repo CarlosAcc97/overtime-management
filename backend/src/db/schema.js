@@ -69,6 +69,7 @@ export const overtimeRecords = sqliteTable('overtime_records', {
   overtimeType: text('overtime_type').notNull(),          // code de overtime_types (ej: 'extra')
   factor: real('factor').notNull(),                        // copiado de overtime_types al crear
   costCenterId: integer('cost_center_id').references(() => costCenters.id),
+  activityCategory: text('activity_category'),           // categoría predefinida del motivo de hora extra
   activityDescription: text('activity_description'),   // ingresado por jefatura al aprobar
   excessJustification: text('excess_justification'),    // ingresado por jefatura al aprobar si alertLevel >= 1
   status: text('status', {
