@@ -12,9 +12,10 @@ router.use(authenticate);
 const ACTIVITY_CATEGORIES = [
   'Trabajo Administrativo',
   'Contingencia',
-  'Atención de Reclamo',
+  'Atención de Reclamos',
   'Planificación Deficiente',
   'Requerimientos Urgentes',
+  'Otro',
 ];
 
 const approveSchema = z.object({

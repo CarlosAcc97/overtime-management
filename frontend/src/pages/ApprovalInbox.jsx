@@ -32,9 +32,10 @@ import { useAuth } from '@/context/AuthContext';
 const ACTIVITY_CATEGORIES = [
   'Trabajo Administrativo',
   'Contingencia',
-  'Atención de Reclamo',
+  'Atención de Reclamos',
   'Planificación Deficiente',
   'Requerimientos Urgentes',
+  'Otro',
 ];
 
 // ─── Esquemas de validación ───────────────────────────────────────────────────
