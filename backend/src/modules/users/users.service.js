@@ -43,10 +43,9 @@ export const findAll = async ({ search, role, departmentId, isActive, page = 1, 
 
   const where = conditions.length ? and(...conditions) : undefined;
 
-  const [rows, [{ count }]] = await Promise.all([
-    db.select(USER_SELECT).from(users).where(where).limit(limit).offset(offset).orderBy(users.lastName, users.firstName),
-    db.select({ count: sql`count(*)` }).from(users).where(where),
-  ]);
+  // Consultas secuenciales — libsql/Turso no soporta concurrencia (no Promise.all)
+  const rows = await db.select(USER_SELECT).from(users).where(where).limit(limit).offset(offset).orderBy(users.lastName, users.firstName);
+  const [{ count }] = await db.select({ count: sql`count(*)` }).from(users).where(where);
 
   // Enriquecer con nombres — consultas secuenciales (libsql no soporta concurrencia)
   const enriched = [];
