@@ -29,6 +29,12 @@ const STATUS_LABELS = {
 const buildWhere = async (requester, { dateFrom, dateTo, status, userId, departmentId } = {}) => {
   const conditions = [];
 
+  // Si no hay filtro de estado explícito, excluir anulados y rechazados del reporte
+  // (igual que el dashboard — solo cuentan los registros activos)
+  if (!status) {
+    conditions.push(notInArray(overtimeRecords.status, [STATUS.ANULADO, STATUS.RECHAZADO]));
+  }
+
   // Scope por rol + filtro de departamento
   if (requester.role === ROLES.JEFATURA) {
     const team = await db.select({ id: users.id }).from(users).where(eq(users.supervisorId, requester.id));
