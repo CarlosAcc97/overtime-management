@@ -1,6 +1,6 @@
 import { db } from '../../config/database.js';
-import { overtimeRecords, overtimeTypes, users, costCenters } from '../../db/schema.js';
-import { eq, and, or, gte, lte, ne, notInArray, desc, sql } from 'drizzle-orm';
+import { overtimeRecords, overtimeTypes, users, costCenters, alertLogs, approvals } from '../../db/schema.js';
+import { eq, and, or, gte, lte, ne, notInArray, inArray, desc, sql } from 'drizzle-orm';
 import { createError } from '../../middleware/errorHandler.js';
 import { calcHours, daysFromToday, timesOverlap } from '../../utils/dateHelpers.js';
 import { calculateAlertLevel, saveAlertLog, getConfigValue } from '../../services/alert.service.js';
@@ -286,6 +286,49 @@ export const cancel = async (id, cancellationReason, requester, ip) => {
  */
 export const checkLimits = async (userId, date, hours, excludeId = null) => {
   return calculateAlertLevel(userId, date, hours, excludeId);
+};
+
+/**
+ * Cuenta los registros en estado ANULADO.
+ */
+export const countCancelled = async () => {
+  const [result] = await db
+    .select({ count: sql`count(*)` })
+    .from(overtimeRecords)
+    .where(eq(overtimeRecords.status, STATUS.ANULADO));
+  return { count: Number(result?.count ?? 0) };
+};
+
+/**
+ * Elimina permanentemente todos los registros ANULADO y sus datos relacionados.
+ * Solo puede ejecutarlo un administrador.
+ */
+export const purgeCancelled = async (requesterId, ip) => {
+  // Obtener IDs de los registros a eliminar
+  const toDelete = await db
+    .select({ id: overtimeRecords.id })
+    .from(overtimeRecords)
+    .where(eq(overtimeRecords.status, STATUS.ANULADO));
+
+  const ids = toDelete.map(r => r.id);
+  if (ids.length === 0) return { deleted: 0 };
+
+  // Eliminar tablas relacionadas primero (respeto de FK)
+  await db.delete(approvals).where(inArray(approvals.overtimeRecordId, ids));
+  await db.delete(alertLogs).where(inArray(alertLogs.overtimeRecordId, ids));
+  await db.delete(overtimeRecords).where(inArray(overtimeRecords.id, ids));
+
+  await logAudit({
+    userId: requesterId,
+    action: 'overtime.purge_cancelled',
+    entityType: 'overtime_record',
+    entityId: null,
+    oldValues: { count: ids.length, ids },
+    newValues: { status: 'DELETED_PERMANENTLY' },
+    req: { ip },
+  });
+
+  return { deleted: ids.length };
 };
 
 export const getStats = async (userId) => {

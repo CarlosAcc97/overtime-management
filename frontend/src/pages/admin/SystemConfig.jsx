@@ -1,17 +1,23 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { toast } from '@/hooks/use-toast';
 import { getSystemConfig, updateSystemConfig } from '@/services/users.service';
+import { getCancelledCount, purgeCancelledRecords } from '@/services/overtime.service';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
 import { PageLoader } from '@/components/common/LoadingSpinner';
-import { Settings, Save, RefreshCw, Info, Clock, DollarSign, AlertTriangle } from 'lucide-react';
+import { Settings, Save, RefreshCw, Info, Clock, DollarSign, AlertTriangle, Trash2, ShieldAlert } from 'lucide-react';
 
 // ─── Schema de validación ─────────────────────────────────────────────────────
 const configSchema = z.object({
@@ -171,6 +177,32 @@ export default function SystemConfig() {
     },
   });
 
+  // ── Mantenimiento: purgar anulados ──────────────────────────────────────────
+  const { data: cancelledData, refetch: refetchCancelled } = useQuery({
+    queryKey: ['cancelled-count'],
+    queryFn: getCancelledCount,
+  });
+  const cancelledCount = cancelledData?.count ?? 0;
+
+  const purgeMutation = useMutation({
+    mutationFn: purgeCancelledRecords,
+    onSuccess: (result) => {
+      refetchCancelled();
+      toast({
+        title: 'Registros eliminados',
+        description: `${result.deleted} registro(s) anulado(s) eliminado(s) permanentemente.`,
+        variant: 'success',
+      });
+    },
+    onError: (err) => {
+      toast({
+        title: 'Error al eliminar',
+        description: err?.response?.data?.message || 'Ocurrió un error inesperado.',
+        variant: 'destructive',
+      });
+    },
+  });
+
   if (isLoading) return <PageLoader />;
 
   return (
@@ -258,6 +290,67 @@ export default function SystemConfig() {
           )}
         </div>
       </form>
+
+      {/* ── Mantenimiento de datos ──────────────────────────────────── */}
+      <Card className="border-red-200">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base flex items-center gap-2">
+            <ShieldAlert className="h-4 w-4 text-red-500" />
+            Mantenimiento de datos
+          </CardTitle>
+          <CardDescription className="text-xs">
+            Acciones destructivas e irreversibles. Úselas con precaución.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-center justify-between rounded-lg border border-red-100 bg-red-50 p-4">
+            <div>
+              <p className="text-sm font-medium text-red-900">Eliminar registros anulados</p>
+              <p className="text-xs text-red-700 mt-0.5">
+                Borra permanentemente todos los registros con estado <strong>ANULADO</strong> y su historial de validaciones.
+                {cancelledCount > 0
+                  ? <span className="ml-1 font-semibold">Actualmente hay {cancelledCount} registro(s) anulado(s).</span>
+                  : <span className="ml-1 text-red-500">No hay registros anulados.</span>
+                }
+              </p>
+            </div>
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  disabled={cancelledCount === 0 || purgeMutation.isPending}
+                  className="ml-4 shrink-0"
+                >
+                  {purgeMutation.isPending
+                    ? <><RefreshCw className="mr-2 h-3.5 w-3.5 animate-spin" /> Eliminando…</>
+                    : <><Trash2 className="mr-2 h-3.5 w-3.5" /> Purgar anulados ({cancelledCount})</>
+                  }
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>¿Eliminar {cancelledCount} registro(s) anulado(s)?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    Esta acción es <strong>permanente e irreversible</strong>. Se eliminarán {cancelledCount} registro(s) con estado ANULADO junto con todo su historial de validaciones y alertas.
+                    <br /><br />
+                    Los registros activos (pendientes, aprobados, retenidos) <strong>no se verán afectados</strong>.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                  <AlertDialogAction
+                    onClick={() => purgeMutation.mutate()}
+                    className="bg-red-600 hover:bg-red-700 focus:ring-red-600"
+                  >
+                    Sí, eliminar permanentemente
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }

@@ -16,6 +16,10 @@ router.get('/:id', anyRole, overtimeController.getById);
 router.post('/', onlyAdmin, overtimeController.create);
 router.put('/:id', onlyAdmin, overtimeController.update);
 
+// Mantenimiento de datos: solo administrador
+router.get('/cancelled-count', onlyAdmin, overtimeController.getCancelledCount);
+router.delete('/purge-cancelled', onlyAdmin, overtimeController.purgeCancelled);
+
 // Anulación: cualquier rol (con validación interna de permisos)
 router.patch('/:id/cancel', anyRole, overtimeController.cancel);
 

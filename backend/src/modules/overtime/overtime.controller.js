@@ -50,3 +50,13 @@ export const getMyStats = async (req, res) => {
   const stats = await overtimeService.getStats(req.user.id);
   ok(res, stats);
 };
+
+export const getCancelledCount = async (req, res) => {
+  const result = await overtimeService.countCancelled();
+  ok(res, result);
+};
+
+export const purgeCancelled = async (req, res) => {
+  const result = await overtimeService.purgeCancelled(req.user.id, req.ip);
+  ok(res, result, `${result.deleted} registro(s) anulado(s) eliminado(s) permanentemente`);
+};

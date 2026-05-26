@@ -61,6 +61,18 @@ export const toggleOvertimeType = async (id) => {
   return data.data.overtimeType;
 };
 
+// ─── Mantenimiento de datos ───────────────────────────────────────────────────
+
+export const getCancelledCount = async () => {
+  const { data } = await api.get('/overtime/cancelled-count');
+  return data.data; // { count }
+};
+
+export const purgeCancelledRecords = async () => {
+  const { data } = await api.delete('/overtime/purge-cancelled');
+  return data.data; // { deleted }
+};
+
 // ─── Carga masiva ─────────────────────────────────────────────────────────────
 
 /** Descarga la plantilla Excel de carga masiva como blob */
