@@ -289,6 +289,36 @@ export const checkLimits = async (userId, date, hours, excludeId = null) => {
 };
 
 /**
+ * Elimina permanentemente un registro individual (solo si está ANULADO).
+ * Solo puede ejecutarlo un administrador.
+ */
+export const deleteRecord = async (id, requesterId, ip) => {
+  const [record] = await db.select().from(overtimeRecords)
+    .where(eq(overtimeRecords.id, parseInt(id))).limit(1);
+
+  if (!record) throw createError('Registro no encontrado', 404);
+  if (record.status !== STATUS.ANULADO) {
+    throw createError('Solo se pueden eliminar permanentemente registros con estado ANULADO', 409);
+  }
+
+  await db.delete(approvals).where(eq(approvals.overtimeRecordId, record.id));
+  await db.delete(alertLogs).where(eq(alertLogs.overtimeRecordId, record.id));
+  await db.delete(overtimeRecords).where(eq(overtimeRecords.id, record.id));
+
+  await logAudit({
+    userId: requesterId,
+    action: 'overtime.delete_permanent',
+    entityType: 'overtime_record',
+    entityId: record.id,
+    oldValues: { status: record.status, date: record.date, userId: record.userId },
+    newValues: { deleted: true },
+    req: { ip },
+  });
+
+  return { deleted: true, id: record.id };
+};
+
+/**
  * Cuenta los registros en estado ANULADO.
  */
 export const countCancelled = async () => {

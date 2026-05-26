@@ -51,6 +51,11 @@ export const getMyStats = async (req, res) => {
   ok(res, stats);
 };
 
+export const deleteRecord = async (req, res) => {
+  const result = await overtimeService.deleteRecord(req.params.id, req.user.id, req.ip);
+  ok(res, result, 'Registro eliminado permanentemente');
+};
+
 export const getCancelledCount = async (req, res) => {
   const result = await overtimeService.countCancelled();
   ok(res, result);

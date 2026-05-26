@@ -61,6 +61,11 @@ export const toggleOvertimeType = async (id) => {
   return data.data.overtimeType;
 };
 
+export const deleteOvertimeRecord = async (id) => {
+  const { data } = await api.delete(`/overtime/${id}`);
+  return data.data;
+};
+
 // ─── Mantenimiento de datos ───────────────────────────────────────────────────
 
 export const getCancelledCount = async () => {

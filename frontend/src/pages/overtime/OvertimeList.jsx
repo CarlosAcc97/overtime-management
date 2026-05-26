@@ -21,8 +21,12 @@ import {
   Plus, Clock, Calendar, RefreshCw, Pencil, XCircle,
   Eye, TrendingUp, AlertTriangle, CheckCircle,
   Upload, Download, FileSpreadsheet, CheckCircle2, XCircle as XCircleIcon,
-  AlertCircle, ChevronDown, ChevronUp,
+  AlertCircle, ChevronDown, ChevronUp, Trash2,
 } from 'lucide-react';
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { formatHoursDecimal, formatOvertimeType, formatStatus } from '@/utils/formatters';
 import { useAuth } from '@/context/AuthContext';
 
@@ -270,6 +274,7 @@ export default function OvertimeList() {
   const [cancelTarget, setCancelTarget] = useState(null);
   const [cancelReason, setCancelReason] = useState('');
   const [cancelError, setCancelError]   = useState('');
+  const [deleteTarget, setDeleteTarget] = useState(null);
   const [showBulk, setShowBulk]         = useState(false);
 
   const { data, isLoading, isError, refetch } = useQuery({
@@ -299,6 +304,22 @@ export default function OvertimeList() {
       toast({ title: 'Registro anulado', variant: 'success' });
     },
     onError: (err) => setCancelError(err.response?.data?.message || 'Error al anular'),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: () => overtimeService.deleteOvertimeRecord(deleteTarget.id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['overtime'] });
+      queryClient.invalidateQueries({ queryKey: ['overtime-stats'] });
+      queryClient.invalidateQueries({ queryKey: ['cancelled-count'] });
+      setDeleteTarget(null);
+      toast({ title: 'Registro eliminado permanentemente', variant: 'success' });
+    },
+    onError: (err) => toast({
+      title: 'Error al eliminar',
+      description: err?.response?.data?.message || 'No se pudo eliminar el registro.',
+      variant: 'destructive',
+    }),
   });
 
   const records    = data?.data ?? [];
@@ -531,6 +552,16 @@ export default function OvertimeList() {
                             <XCircle className="h-4 w-4 text-destructive" />
                           </Button>
                         )}
+                        {user?.role === 'administrador' && r.status === 'ANULADO' && (
+                          <Button
+                            variant="ghost" size="icon"
+                            onClick={() => setDeleteTarget(r)}
+                            title="Eliminar permanentemente"
+                            className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -602,6 +633,36 @@ export default function OvertimeList() {
         onClose={() => setShowBulk(false)}
         onSuccess={handleBulkSuccess}
       />
+
+      {/* Dialog eliminar permanentemente */}
+      <AlertDialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>¿Eliminar registro permanentemente?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Se eliminará el registro del{' '}
+              <strong>
+                {deleteTarget && new Date(deleteTarget.date + 'T12:00:00').toLocaleDateString('es-CL', {
+                  weekday: 'long', day: '2-digit', month: 'long',
+                })}
+              </strong>{' '}
+              de <strong>{deleteTarget?.user?.firstName} {deleteTarget?.user?.lastName}</strong> ({deleteTarget?.hoursCalculated} hrs).
+              <br /><br />
+              Esta acción es <strong>irreversible</strong>. El registro y su historial de validaciones serán eliminados de la base de datos.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => deleteMutation.mutate()}
+              disabled={deleteMutation.isPending}
+              className="bg-red-600 hover:bg-red-700 focus:ring-red-600"
+            >
+              {deleteMutation.isPending ? 'Eliminando…' : 'Sí, eliminar permanentemente'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

@@ -1,4 +1,5 @@
-import { useQuery } from '@tanstack/react-query';
+import { useState } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useParams } from 'react-router-dom';
 import * as overtimeService from '@/services/overtime.service';
 import * as approvalService from '@/services/approvals.service';
@@ -9,10 +10,15 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { StatusBadge, AlertBadge } from '@/components/common/StatusBadge';
 import { PageLoader } from '@/components/common/LoadingSpinner';
 import {
-  ArrowLeft, Pencil, Clock, Calendar, User, Building2,
-  FileText, AlertTriangle, CheckSquare, MessageSquare,
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import { toast } from '@/hooks/use-toast';
+import {
+  ArrowLeft, Pencil, Clock, User,
+  FileText, AlertTriangle, CheckSquare, MessageSquare, Trash2,
 } from 'lucide-react';
-import { formatHoursDecimal, formatOvertimeType, formatStatus } from '@/utils/formatters';
+import { formatHoursDecimal, formatOvertimeType } from '@/utils/formatters';
 import { useAuth } from '@/context/AuthContext';
 
 const InfoRow = ({ label, value, className = '' }) => (
@@ -40,7 +46,9 @@ const actionColor = (action) => {
 export default function OvertimeDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const { user } = useAuth();
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
 
   const { data: record, isLoading, isError } = useQuery({
     queryKey: ['overtime', id],
@@ -53,6 +61,23 @@ export default function OvertimeDetail() {
     enabled: !!id,
   });
 
+  const deleteMutation = useMutation({
+    mutationFn: () => overtimeService.deleteOvertimeRecord(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['overtime'] });
+      queryClient.invalidateQueries({ queryKey: ['cancelled-count'] });
+      toast({ title: 'Registro eliminado permanentemente', variant: 'success' });
+      navigate('/mis-horas');
+    },
+    onError: (err) => {
+      toast({
+        title: 'Error al eliminar',
+        description: err?.response?.data?.message || 'No se pudo eliminar el registro.',
+        variant: 'destructive',
+      });
+    },
+  });
+
   if (isLoading) return <PageLoader />;
   if (isError || !record) return (
     <div className="text-center py-20 text-muted-foreground">
@@ -61,7 +86,8 @@ export default function OvertimeDetail() {
     </div>
   );
 
-  const canEdit = user.role === 'administrador' && ['PENDIENTE', 'ACLARACION_SOLICITADA'].includes(record.status);
+  const canEdit   = user.role === 'administrador' && ['PENDIENTE', 'ACLARACION_SOLICITADA'].includes(record.status);
+  const canDelete = user.role === 'administrador' && record.status === 'ANULADO';
   const needsClarification = record.status === 'ACLARACION_SOLICITADA';
 
   return (
@@ -81,6 +107,15 @@ export default function OvertimeDetail() {
         {canEdit && (
           <Button variant="outline" onClick={() => navigate(`/mis-horas/${id}/editar`)}>
             <Pencil className="mr-2 h-4 w-4" /> Editar
+          </Button>
+        )}
+        {canDelete && (
+          <Button
+            variant="destructive"
+            size="sm"
+            onClick={() => setShowDeleteDialog(true)}
+          >
+            <Trash2 className="mr-2 h-4 w-4" /> Eliminar
           </Button>
         )}
       </div>
@@ -137,7 +172,7 @@ export default function OvertimeDetail() {
         </Card>
       )}
 
-      {/* Descripción / Actividad (si ya fue aprobado y tiene descripción) */}
+      {/* Descripción / Actividad */}
       {record.activityDescription && (
         <Card>
           <CardHeader className="pb-3">
@@ -220,6 +255,36 @@ export default function OvertimeDetail() {
           <span>Actualizado: {new Date(record.updatedAt).toLocaleString('es-CL')}</span>
         )}
       </div>
+
+      {/* Dialog eliminar permanentemente */}
+      <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>¿Eliminar registro permanentemente?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Se eliminará el registro #{record.id} del{' '}
+              <strong>
+                {new Date(record.date + 'T12:00:00').toLocaleDateString('es-CL', {
+                  weekday: 'long', day: '2-digit', month: 'long', year: 'numeric',
+                })}
+              </strong>{' '}
+              de <strong>{record.user?.firstName} {record.user?.lastName}</strong> ({record.hoursCalculated} hrs).
+              <br /><br />
+              Esta acción es <strong>irreversible</strong>. El registro y su historial de validaciones serán eliminados de la base de datos.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => deleteMutation.mutate()}
+              disabled={deleteMutation.isPending}
+              className="bg-red-600 hover:bg-red-700 focus:ring-red-600"
+            >
+              {deleteMutation.isPending ? 'Eliminando…' : 'Sí, eliminar permanentemente'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
