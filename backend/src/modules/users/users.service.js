@@ -126,17 +126,18 @@ export const update = async (id, data) => {
   if (!existing) throw createError('Usuario no encontrado', 404);
 
   const updateData = {
-    firstName: data.firstName ?? existing.firstName,
-    lastName: data.lastName ?? existing.lastName,
-    email: data.email ? data.email.toLowerCase().trim() : existing.email,
-    role: data.role ?? existing.role,
+    firstName:    data.firstName ?? existing.firstName,
+    lastName:     data.lastName  ?? existing.lastName,
+    email:        data.email ? data.email.toLowerCase().trim() : existing.email,
+    role:         data.role ?? existing.role,
     supervisorId: data.supervisorId !== undefined ? (data.supervisorId || null) : existing.supervisorId,
     departmentId: data.departmentId !== undefined ? (data.departmentId || null) : existing.departmentId,
     costCenterId: data.costCenterId !== undefined ? (data.costCenterId || null) : existing.costCenterId,
-    hourlyRate: data.hourlyRate !== undefined ? data.hourlyRate : existing.hourlyRate,
-    isActive: data.isActive !== undefined ? data.isActive : existing.isActive,
-    rut: data.rut !== undefined ? data.rut : existing.rut,
-    employeeId: data.employeeId !== undefined ? data.employeeId : existing.employeeId,
+    hourlyRate:   data.hourlyRate   !== undefined ? data.hourlyRate   : existing.hourlyRate,
+    isActive:     data.isActive     !== undefined ? data.isActive     : existing.isActive,
+    // Convertir string vacío a null para respetar la restricción UNIQUE de SQLite
+    rut:        data.rut        !== undefined ? (data.rut?.trim()        || null) : existing.rut,
+    employeeId: data.employeeId !== undefined ? (data.employeeId?.trim() || null) : existing.employeeId,
     updatedAt: new Date().toISOString(),
   };
 
