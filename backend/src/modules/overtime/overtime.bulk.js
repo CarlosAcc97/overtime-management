@@ -271,11 +271,12 @@ router.post('/bulk', authenticate, onlyAdmin, upload.single('file'), async (req,
   const ws   = wb.Sheets[wb.SheetNames[0]];
   const rows = xlsx.utils.sheet_to_json(ws, { header: 1, raw: true, defval: null });
 
-  // Buscar la fila de encabezados (fila con "RUT" o "Email")
+  // Buscar la fila de encabezados (fila con "RUT" o "Email" como valor corto, no texto largo)
+  // Se ignoran celdas > 30 caracteres para evitar detectar textos de instrucciones
   let headerIdx = -1;
   for (let i = 0; i < Math.min(10, rows.length); i++) {
     const row = rows[i].map(c => String(c || '').trim().toLowerCase());
-    if (row.some(c => c.includes('rut') || c.includes('email'))) {
+    if (row.some(c => c.length < 30 && (c.includes('rut') || c.includes('email')))) {
       headerIdx = i;
       break;
     }
@@ -350,7 +351,9 @@ router.post('/bulk', authenticate, onlyAdmin, upload.single('file'), async (req,
     if (!endTime)   errors.push('Hora término inválida (usa HH:MM)');
     if (startTime && endTime) {
       const toMin = t => { const [h,m] = t.split(':').map(Number); return h*60+m; };
-      if (toMin(endTime) <= toMin(startTime)) errors.push('La hora de término debe ser posterior a la hora de inicio');
+      const sMin = toMin(startTime), eMin = toMin(endTime);
+      // Permitir cruce de medianoche (ej: 20:00 → 00:36). Solo rechazar si duración = 0.
+      if (eMin === sMin) errors.push('Duración cero: hora inicio igual a hora término');
     }
 
     // ── Tipo de hora extra ────────────────────────────────────────────────

@@ -22,8 +22,9 @@ export const calcHours = (startTime, endTime) => {
   const [sh, sm] = startTime.split(':').map(Number);
   const [eh, em] = endTime.split(':').map(Number);
   const startMinutes = sh * 60 + sm;
-  const endMinutes = eh * 60 + em;
-  if (endMinutes <= startMinutes) return 0;
+  let endMinutes = eh * 60 + em;
+  // Cruce de medianoche: sumar 24h al término (ej: 20:00 → 00:36 = 40 min)
+  if (endMinutes <= startMinutes) endMinutes += 24 * 60;
   return Math.round(((endMinutes - startMinutes) / 60) * 100) / 100;
 };
 
