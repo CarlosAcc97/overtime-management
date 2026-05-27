@@ -6,19 +6,21 @@ import { onlyAdmin, anyRole } from '../../middleware/authorize.js';
 const router = Router();
 router.use(authenticate);
 
-// Consultas disponibles para todos los roles autenticados
+// Rutas estáticas primero (deben ir ANTES de /:id para que Express no las confunda)
 router.get('/check-limits', anyRole, overtimeController.checkLimits);
 router.get('/my-stats', anyRole, overtimeController.getMyStats);
-router.get('/', anyRole, overtimeController.getAll);
-router.get('/:id', anyRole, overtimeController.getById);
-
-// Creación y edición: solo administrador
-router.post('/', onlyAdmin, overtimeController.create);
-router.put('/:id', onlyAdmin, overtimeController.update);
-
-// Mantenimiento de datos: solo administrador
 router.get('/cancelled-count', onlyAdmin, overtimeController.getCancelledCount);
+
+// Rutas de colección
+router.get('/', anyRole, overtimeController.getAll);
+router.post('/', onlyAdmin, overtimeController.create);
+
+// Mantenimiento masivo (antes de /:id para evitar conflictos)
 router.delete('/purge-cancelled', onlyAdmin, overtimeController.purgeCancelled);
+
+// Rutas con parámetro dinámico
+router.get('/:id', anyRole, overtimeController.getById);
+router.put('/:id', onlyAdmin, overtimeController.update);
 router.delete('/:id', onlyAdmin, overtimeController.deleteRecord);
 
 // Anulación: cualquier rol (con validación interna de permisos)

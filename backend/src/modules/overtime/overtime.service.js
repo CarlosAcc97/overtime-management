@@ -78,14 +78,16 @@ export const findAll = async ({ userId, role, page = 1, limit = 20, status, date
 
   const where = conditions.length ? and(...conditions) : undefined;
 
-  const [rows, countResult] = await Promise.all([
-    db.select().from(overtimeRecords).where(where)
-      .orderBy(desc(overtimeRecords.date), desc(overtimeRecords.createdAt))
-      .limit(limit).offset(offset),
-    db.select({ count: sql`count(*)` }).from(overtimeRecords).where(where),
-  ]);
+  // Consultas secuenciales — libsql/Turso no soporta concurrencia (no Promise.all)
+  const rows = await db.select().from(overtimeRecords).where(where)
+    .orderBy(desc(overtimeRecords.date), desc(overtimeRecords.createdAt))
+    .limit(limit).offset(offset);
+  const countResult = await db.select({ count: sql`count(*)` }).from(overtimeRecords).where(where);
 
-  const enriched = await Promise.all(rows.map(enrichRecord));
+  const enriched = [];
+  for (const row of rows) {
+    enriched.push(await enrichRecord(row));
+  }
   return { data: enriched, total: Number(countResult[0]?.count ?? 0), page, limit };
 };
 
