@@ -10,6 +10,7 @@ router.use(authenticate);
 router.get('/check-limits', anyRole, overtimeController.checkLimits);
 router.get('/my-stats', anyRole, overtimeController.getMyStats);
 router.get('/cancelled-count', onlyAdmin, overtimeController.getCancelledCount);
+router.get('/duplicates', onlyAdmin, overtimeController.getDuplicates);
 
 // Rutas de colección
 router.get('/', anyRole, overtimeController.getAll);

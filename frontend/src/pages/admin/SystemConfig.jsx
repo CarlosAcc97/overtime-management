@@ -17,7 +17,11 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 import { PageLoader } from '@/components/common/LoadingSpinner';
-import { Settings, Save, RefreshCw, Info, Clock, DollarSign, AlertTriangle, Trash2, ShieldAlert } from 'lucide-react';
+import { Settings, Save, RefreshCw, Info, Clock, DollarSign, AlertTriangle, Trash2, ShieldAlert, Copy, ChevronDown, ChevronUp } from 'lucide-react';
+import { getDuplicates, cancelOvertime } from '@/services/overtime.service';
+import { Badge } from '@/components/ui/badge';
+import { StatusBadge } from '@/components/common/StatusBadge';
+import { formatOvertimeType } from '@/utils/formatters';
 
 // ─── Schema de validación ─────────────────────────────────────────────────────
 const configSchema = z.object({
@@ -177,6 +181,26 @@ export default function SystemConfig() {
     },
   });
 
+  // ── Diagnóstico: registros duplicados ───────────────────────────────────────
+  const [showDuplicates, setShowDuplicates] = useState(false);
+  const [cancelReason, setCancelReason] = useState('Registro duplicado por error de carga masiva');
+
+  const { data: dupData, isLoading: dupLoading, refetch: refetchDups } = useQuery({
+    queryKey: ['duplicates'],
+    queryFn: getDuplicates,
+    enabled: showDuplicates,
+  });
+  const duplicates = dupData?.duplicates ?? [];
+
+  const cancelDupMutation = useMutation({
+    mutationFn: ({ id }) => cancelOvertime(id, cancelReason),
+    onSuccess: () => {
+      refetchDups();
+      toast({ title: 'Registro anulado', description: 'Puede eliminarlo permanentemente desde "Mis horas extras".', variant: 'success' });
+    },
+    onError: (err) => toast({ title: 'Error al anular', description: err?.response?.data?.message, variant: 'destructive' }),
+  });
+
   // ── Mantenimiento: purgar anulados ──────────────────────────────────────────
   const { data: cancelledData, refetch: refetchCancelled } = useQuery({
     queryKey: ['cancelled-count'],
@@ -290,6 +314,116 @@ export default function SystemConfig() {
           )}
         </div>
       </form>
+
+      {/* ── Diagnóstico: registros duplicados ─────────────────────── */}
+      <Card className="border-amber-200">
+        <CardHeader className="pb-3">
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="text-base flex items-center gap-2">
+                <Copy className="h-4 w-4 text-amber-500" />
+                Diagnóstico de registros duplicados
+              </CardTitle>
+              <CardDescription className="text-xs mt-0.5">
+                Detecta registros con mismo funcionario, fecha y horario que aún están activos.
+              </CardDescription>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => { setShowDuplicates(v => !v); if (!showDuplicates) refetchDups(); }}
+            >
+              {showDuplicates ? <><ChevronUp className="mr-1.5 h-3.5 w-3.5" /> Cerrar</> : <><ChevronDown className="mr-1.5 h-3.5 w-3.5" /> Revisar</>}
+            </Button>
+          </div>
+        </CardHeader>
+
+        {showDuplicates && (
+          <CardContent className="pt-0 space-y-3">
+            {dupLoading ? (
+              <div className="flex items-center justify-center py-8 text-muted-foreground text-sm gap-2">
+                <RefreshCw className="h-4 w-4 animate-spin" /> Analizando base de datos…
+              </div>
+            ) : duplicates.length === 0 ? (
+              <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-6 text-center">
+                <p className="text-sm font-medium text-emerald-700">✓ No se encontraron registros duplicados</p>
+                <p className="text-xs text-emerald-600 mt-1">La base de datos no tiene registros con el mismo funcionario, fecha y horario.</p>
+              </div>
+            ) : (
+              <>
+                <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3">
+                  <p className="text-sm font-semibold text-amber-800">
+                    Se encontraron {duplicates.length} grupo(s) duplicados ({duplicates.reduce((s, g) => s + g.count - 1, 0)} registro(s) extra).
+                  </p>
+                  <p className="text-xs text-amber-700 mt-0.5">
+                    Para cada grupo se conserva el primero (el más antiguo). Anula los restantes y luego elimínalos permanentemente.
+                  </p>
+                </div>
+
+                <div className="space-y-3 max-h-96 overflow-y-auto pr-1">
+                  {duplicates.map((group, gi) => (
+                    <div key={gi} className="rounded-lg border overflow-hidden">
+                      {/* Encabezado del grupo */}
+                      <div className="bg-gray-50 border-b px-4 py-2.5 flex items-center justify-between gap-2">
+                        <div>
+                          <p className="text-sm font-semibold">{group.userName}
+                            {group.employeeId && <span className="text-xs font-normal text-muted-foreground ml-1">· ID {group.employeeId}</span>}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            {new Date(group.date + 'T12:00:00').toLocaleDateString('es-CL', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+                            {' · '}{group.startTime} – {group.endTime}
+                            {' · '}<span className="font-medium text-amber-700">{group.count} registros iguales</span>
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Registros del grupo */}
+                      <div className="divide-y">
+                        {group.records.map((r, ri) => (
+                          <div key={r.id} className={`px-4 py-2.5 flex items-center gap-3 ${ri === 0 ? 'bg-emerald-50/50' : ''}`}>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                {ri === 0 && (
+                                  <span className="text-[10px] font-bold bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded">CONSERVAR</span>
+                                )}
+                                {ri > 0 && (
+                                  <span className="text-[10px] font-bold bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded">DUPLICADO</span>
+                                )}
+                                <span className="text-xs font-mono text-muted-foreground">#{r.id}</span>
+                                <StatusBadge status={r.status} />
+                                <Badge variant="outline" className="text-[10px]">
+                                  {formatOvertimeType(r.overtimeType)}
+                                </Badge>
+                              </div>
+                              <p className="text-[10px] text-muted-foreground mt-0.5">
+                                Creado: {new Date(r.createdAt).toLocaleString('es-CL')}
+                              </p>
+                            </div>
+                            {ri > 0 && !['ANULADO', 'RECHAZADO'].includes(r.status) && (
+                              <Button
+                                size="sm"
+                                variant="destructive"
+                                className="shrink-0 h-7 text-xs"
+                                disabled={cancelDupMutation.isPending}
+                                onClick={() => cancelDupMutation.mutate({ id: r.id })}
+                              >
+                                Anular
+                              </Button>
+                            )}
+                            {['ANULADO', 'RECHAZADO'].includes(r.status) && ri > 0 && (
+                              <span className="text-xs text-muted-foreground shrink-0">Ya anulado</span>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+          </CardContent>
+        )}
+      </Card>
 
       {/* ── Mantenimiento de datos ──────────────────────────────────── */}
       <Card className="border-red-200">

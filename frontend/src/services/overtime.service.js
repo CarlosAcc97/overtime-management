@@ -78,6 +78,11 @@ export const purgeCancelledRecords = async () => {
   return data.data; // { deleted }
 };
 
+export const getDuplicates = async () => {
+  const { data } = await api.get('/overtime/duplicates');
+  return data.data; // { duplicates: [...], total }
+};
+
 // ─── Carga masiva ─────────────────────────────────────────────────────────────
 
 /** Descarga la plantilla Excel de carga masiva como blob */

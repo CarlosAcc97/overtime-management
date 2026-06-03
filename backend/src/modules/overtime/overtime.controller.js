@@ -61,6 +61,11 @@ export const getCancelledCount = async (req, res) => {
   ok(res, result);
 };
 
+export const getDuplicates = async (req, res) => {
+  const result = await overtimeService.findDuplicates();
+  ok(res, { duplicates: result, total: result.length });
+};
+
 export const purgeCancelled = async (req, res) => {
   const result = await overtimeService.purgeCancelled(req.user.id, req.ip);
   ok(res, result, `${result.deleted} registro(s) anulado(s) eliminado(s) permanentemente`);

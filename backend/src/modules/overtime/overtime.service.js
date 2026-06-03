@@ -363,6 +363,67 @@ export const purgeCancelled = async (requesterId, ip) => {
   return { deleted: ids.length };
 };
 
+/**
+ * Encuentra registros duplicados: mismo funcionario, misma fecha, mismo horario,
+ * estados activos (excluye RECHAZADO y ANULADO).
+ * Retorna grupos con todos los registros duplicados y sus datos.
+ */
+export const findDuplicates = async () => {
+  // Paso 1: encontrar grupos con más de un registro idéntico
+  const groups = await db.select({
+    userId:    overtimeRecords.userId,
+    date:      overtimeRecords.date,
+    startTime: overtimeRecords.startTime,
+    endTime:   overtimeRecords.endTime,
+    count:     sql`count(*) as cnt`,
+  }).from(overtimeRecords)
+    .where(notInArray(overtimeRecords.status, [STATUS.RECHAZADO, STATUS.ANULADO]))
+    .groupBy(overtimeRecords.userId, overtimeRecords.date, overtimeRecords.startTime, overtimeRecords.endTime)
+    .having(sql`count(*) > 1`);
+
+  if (groups.length === 0) return [];
+
+  // Paso 2: para cada grupo, obtener los registros concretos con nombre del funcionario
+  const result = [];
+  for (const g of groups) {
+    const records = await db.select({
+      id:              overtimeRecords.id,
+      date:            overtimeRecords.date,
+      startTime:       overtimeRecords.startTime,
+      endTime:         overtimeRecords.endTime,
+      hoursCalculated: overtimeRecords.hoursCalculated,
+      overtimeType:    overtimeRecords.overtimeType,
+      status:          overtimeRecords.status,
+      createdAt:       overtimeRecords.createdAt,
+    }).from(overtimeRecords)
+      .where(and(
+        eq(overtimeRecords.userId, g.userId),
+        eq(overtimeRecords.date, g.date),
+        eq(overtimeRecords.startTime, g.startTime),
+        eq(overtimeRecords.endTime, g.endTime),
+        notInArray(overtimeRecords.status, [STATUS.RECHAZADO, STATUS.ANULADO]),
+      ))
+      .orderBy(overtimeRecords.createdAt);
+
+    const [user] = await db.select({
+      id: users.id, firstName: users.firstName, lastName: users.lastName, employeeId: users.employeeId,
+    }).from(users).where(eq(users.id, g.userId)).limit(1);
+
+    result.push({
+      userId:    g.userId,
+      userName:  user ? `${user.firstName} ${user.lastName}` : `ID ${g.userId}`,
+      employeeId: user?.employeeId,
+      date:      g.date,
+      startTime: g.startTime,
+      endTime:   g.endTime,
+      count:     Number(g.count),
+      records,
+    });
+  }
+
+  return result;
+};
+
 export const getStats = async (userId) => {
   const now = new Date();
   const monthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
