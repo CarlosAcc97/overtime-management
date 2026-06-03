@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
   BarChart, Bar, LineChart, Line, PieChart, Pie, Cell,
@@ -7,12 +8,25 @@ import * as dashboardService from '@/services/dashboard.service';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { PageLoader } from '@/components/common/LoadingSpinner';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
   Clock, AlertTriangle, CheckCircle, TrendingUp, TrendingDown,
   DollarSign, AlertOctagon, Users,
 } from 'lucide-react';
 import { formatHoursDecimal, formatCLP } from '@/utils/formatters';
 import { useAuth } from '@/context/AuthContext';
+
+// ─── Etiquetas de período ─────────────────────────────────────────────────────
+const PERIOD_LABELS = {
+  mes:       'Este mes',
+  anio:      'Este año',
+  historico: 'Histórico',
+};
+const TREND_TITLES = {
+  mes:       'Evolución últimos 6 períodos',
+  anio:      'Períodos del año actual',
+  historico: 'Evolución histórica (últimos 24 períodos)',
+};
 
 // ─── Colores consistentes ─────────────────────────────────────────────────────
 const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4'];
@@ -58,42 +72,44 @@ const CustomTooltip = ({ active, payload, label }) => {
 // ─── Página principal ─────────────────────────────────────────────────────────
 export default function Dashboard() {
   const { user } = useAuth();
-  const isAdmin = user?.role === 'administrador';
+  const isAdmin           = user?.role === 'administrador';
   const isJefaturaOrAdmin = ['jefatura', 'administrador'].includes(user?.role);
 
+  const [period, setPeriod] = useState('mes');
+
   const { data: kpis, isLoading: kpisLoading } = useQuery({
-    queryKey: ['dashboard-kpis'],
-    queryFn: dashboardService.getKpis,
+    queryKey: ['dashboard-kpis', period],
+    queryFn: () => dashboardService.getKpis(period),
     refetchInterval: 60_000,
   });
 
   const { data: trend = [] } = useQuery({
-    queryKey: ['dashboard-trend'],
-    queryFn: dashboardService.getMonthlyTrend,
+    queryKey: ['dashboard-trend', period],
+    queryFn: () => dashboardService.getMonthlyTrend(period),
     enabled: isJefaturaOrAdmin,
   });
 
   const { data: byCostCenter = [] } = useQuery({
-    queryKey: ['dashboard-cc'],
-    queryFn: dashboardService.getByCostCenter,
+    queryKey: ['dashboard-cc', period],
+    queryFn: () => dashboardService.getByCostCenter(period),
     enabled: isJefaturaOrAdmin,
   });
 
   const { data: topEmployees = [] } = useQuery({
-    queryKey: ['dashboard-top'],
-    queryFn: dashboardService.getTopEmployees,
+    queryKey: ['dashboard-top', period],
+    queryFn: () => dashboardService.getTopEmployees(period),
     enabled: isJefaturaOrAdmin,
   });
 
   const { data: byType = [] } = useQuery({
-    queryKey: ['dashboard-type'],
-    queryFn: dashboardService.getByType,
+    queryKey: ['dashboard-type', period],
+    queryFn: () => dashboardService.getByType(period),
     enabled: isJefaturaOrAdmin,
   });
 
   const { data: costProj } = useQuery({
-    queryKey: ['dashboard-cost'],
-    queryFn: dashboardService.getCostProjection,
+    queryKey: ['dashboard-cost', period],
+    queryFn: () => dashboardService.getCostProjection(period),
     enabled: isAdmin,
   });
 
@@ -108,22 +124,34 @@ export default function Dashboard() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold">Dashboard</h1>
-        <p className="text-muted-foreground text-sm mt-0.5">
-          Bienvenido/a, {user?.firstName}. Indicadores del mes en curso.
-        </p>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-bold">Dashboard</h1>
+          <p className="text-muted-foreground text-sm mt-0.5">
+            Bienvenido/a, {user?.firstName}. Indicadores — <span className="font-medium text-foreground">{PERIOD_LABELS[period]}</span>
+          </p>
+        </div>
+        <Select value={period} onValueChange={setPeriod}>
+          <SelectTrigger className="w-[160px]">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="mes">Este mes</SelectItem>
+            <SelectItem value="anio">Este año</SelectItem>
+            <SelectItem value="historico">Histórico</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
 
       {/* KPIs */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <KpiCard
-          title="Horas este mes"
+          title={`Horas — ${PERIOD_LABELS[period]}`}
           value={formatHoursDecimal(kpis?.monthHours)}
           icon={Clock}
           iconColor="text-blue-500"
-          trend={kpis?.trend}
-          subtitle={kpis?.trend ? 'vs. mes anterior' : 'primer mes'}
+          trend={period === 'mes' ? kpis?.trend : null}
+          subtitle={period === 'mes' && kpis?.trend ? 'vs. período anterior' : undefined}
         />
         <KpiCard
           title="Registros pendientes"
@@ -167,10 +195,10 @@ export default function Dashboard() {
       {/* Gráficos — solo jefatura y admin */}
       {isJefaturaOrAdmin && (
         <>
-          {/* Tendencia mensual */}
+          {/* Tendencia por período */}
           <Card>
             <CardHeader>
-              <CardTitle className="text-base">Evolución últimos 6 meses</CardTitle>
+              <CardTitle className="text-base">{TREND_TITLES[period]}</CardTitle>
             </CardHeader>
             <CardContent>
               {trend.length === 0 ? (
