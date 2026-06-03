@@ -337,6 +337,7 @@ router.get('/employee-detail', async (req, res) => {
     status: overtimeRecords.status,
     alertLevel: overtimeRecords.alertLevel,
     requiresDoubleValidation: overtimeRecords.requiresDoubleValidation,
+    activityCategory: overtimeRecords.activityCategory,
     activityDescription: overtimeRecords.activityDescription,
     excessJustification: overtimeRecords.excessJustification,
     costCenterId: overtimeRecords.costCenterId,
@@ -348,6 +349,22 @@ router.get('/employee-detail', async (req, res) => {
     .where(and(...conditions))
     .orderBy(overtimeRecords.date, overtimeRecords.startTime);
 
+  // Obtener comentarios de aprobación en una sola consulta (sin Promise.all — Turso)
+  const recordIds = rows.map(r => r.id);
+  const approvalCommentMap = {};
+  if (recordIds.length > 0) {
+    const approvalRows = await db
+      .select({ overtimeRecordId: approvals.overtimeRecordId, comment: approvals.comment })
+      .from(approvals)
+      .where(and(inArray(approvals.overtimeRecordId, recordIds), eq(approvals.action, 'APROBAR')))
+      .orderBy(approvals.createdAt);
+    for (const a of approvalRows) {
+      if (!approvalCommentMap[a.overtimeRecordId]) {
+        approvalCommentMap[a.overtimeRecordId] = a.comment;
+      }
+    }
+  }
+
   // Agrupar por día
   const byDay = {};
   for (const r of rows) {
@@ -355,6 +372,7 @@ router.get('/employee-detail', async (req, res) => {
     byDay[r.date].push({
       ...r,
       cc: r.ccCode ? { code: r.ccCode, name: r.ccName } : null,
+      approvalComment: approvalCommentMap[r.id] ?? null,
     });
   }
 

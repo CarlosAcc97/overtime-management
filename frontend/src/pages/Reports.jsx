@@ -5,6 +5,7 @@ import {
   FileSpreadsheet, Printer, RefreshCw, Download,
   Users, Clock, DollarSign, FileText,
   ChevronLeft, ChevronRight, CalendarDays, X, Search,
+  Eye, EyeOff, MessageSquare, Tag,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -96,6 +97,14 @@ function EmployeeCalendarModal({ employee, filters, open, onClose }) {
     return new Date();
   });
   const [selectedDay, setSelectedDay] = useState(null);
+  // Set de IDs de registros con comentario expandido
+  const [expandedComments, setExpandedComments] = useState(new Set());
+
+  const toggleComment = (id) => setExpandedComments(prev => {
+    const next = new Set(prev);
+    next.has(id) ? next.delete(id) : next.add(id);
+    return next;
+  });
 
   const { data, isLoading } = useQuery({
     queryKey: ['employee-detail', employee?.userId, filters?.dateFrom, filters?.dateTo],
@@ -117,7 +126,13 @@ function EmployeeCalendarModal({ employee, filters, open, onClose }) {
 
   const handleClose = () => {
     setSelectedDay(null);
+    setExpandedComments(new Set());
     onClose();
+  };
+
+  const handleSelectDay = (ds) => {
+    setSelectedDay(prev => prev === ds ? null : ds);
+    setExpandedComments(new Set()); // reset al cambiar de día
   };
 
   return (
@@ -216,7 +231,7 @@ function EmployeeCalendarModal({ employee, filters, open, onClose }) {
                         <button
                           key={di}
                           disabled={!hasRecs}
-                          onClick={() => setSelectedDay(isSelected ? null : ds)}
+                          onClick={() => handleSelectDay(ds)}
                           className={[
                             'relative min-h-[58px] p-1.5 text-left border-b border-r text-xs transition-all',
                             inMonth ? '' : 'opacity-25',
@@ -295,45 +310,80 @@ function EmployeeCalendarModal({ employee, filters, open, onClose }) {
                     ) : selectedRecs.map((r) => {
                       const effectiveHrs = r.hoursCalculated * (r.factor ?? 1);
                       const cost = effectiveHrs * (data?.employee?.hourlyRate ?? 5000);
+                      const isExpanded = expandedComments.has(r.id);
+                      const hasComment = !!r.approvalComment;
                       return (
-                        <div key={r.id} className="px-4 py-3 flex items-start gap-4">
-                          {/* Horario */}
-                          <div className="shrink-0 pt-0.5">
-                            <p className="text-sm font-mono font-semibold">
-                              {r.startTime} – {r.endTime}
-                            </p>
-                            <p className="text-xs text-muted-foreground">{r.hoursCalculated.toFixed(1)} hrs</p>
-                          </div>
-
-                          {/* Info */}
-                          <div className="flex-1 min-w-0 space-y-1">
-                            <div className="flex flex-wrap items-center gap-1.5">
-                              <Badge
-                                className={`text-[10px] ${TYPE_BADGE[r.overtimeType] ?? 'bg-gray-100 text-gray-700'}`}
-                                variant="outline"
-                              >
-                                {formatOvertimeType(r.overtimeType)}
-                              </Badge>
-                              <StatusBadge status={r.status} />
-                              {r.alertLevel > 0 && <AlertBadge level={r.alertLevel} />}
+                        <div key={r.id} className="px-4 py-3 space-y-2">
+                          {/* Fila principal */}
+                          <div className="flex items-start gap-4">
+                            {/* Horario */}
+                            <div className="shrink-0 pt-0.5">
+                              <p className="text-sm font-mono font-semibold">
+                                {r.startTime} – {r.endTime}
+                              </p>
+                              <p className="text-xs text-muted-foreground">{r.hoursCalculated.toFixed(1)} hrs</p>
                             </div>
-                            {r.cc && (
-                              <p className="text-xs text-muted-foreground">
-                                📍 {r.cc.code} — {r.cc.name}
-                              </p>
-                            )}
-                            {r.activityDescription && (
-                              <p className="text-xs text-muted-foreground truncate" title={r.activityDescription}>
-                                {r.activityDescription}
-                              </p>
-                            )}
+
+                            {/* Info */}
+                            <div className="flex-1 min-w-0 space-y-1.5">
+                              {/* Badges de estado y tipo */}
+                              <div className="flex flex-wrap items-center gap-1.5">
+                                <Badge
+                                  className={`text-[10px] ${TYPE_BADGE[r.overtimeType] ?? 'bg-gray-100 text-gray-700'}`}
+                                  variant="outline"
+                                >
+                                  {formatOvertimeType(r.overtimeType)}
+                                </Badge>
+                                <StatusBadge status={r.status} />
+                                {r.alertLevel > 0 && <AlertBadge level={r.alertLevel} />}
+                              </div>
+
+                              {/* Centro de costo */}
+                              {r.cc && (
+                                <p className="text-xs text-muted-foreground">
+                                  📍 {r.cc.code} — {r.cc.name}
+                                </p>
+                              )}
+
+                              {/* Causa (activityCategory / activityDescription) */}
+                              {r.activityDescription && (
+                                <div className="flex items-center gap-1">
+                                  <Tag className="h-3 w-3 text-muted-foreground shrink-0" />
+                                  <p className="text-xs font-medium text-foreground/80">
+                                    {r.activityDescription}
+                                  </p>
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Costo + botón ojo */}
+                            <div className="shrink-0 text-right flex flex-col items-end gap-1.5">
+                              <p className="text-sm font-bold">{effectiveHrs.toFixed(1)}h ef.</p>
+                              <p className="text-xs text-muted-foreground">{formatCLP(Math.round(cost))}</p>
+                              {hasComment && (
+                                <button
+                                  onClick={() => toggleComment(r.id)}
+                                  className="flex items-center gap-1 text-[10px] text-blue-600 hover:text-blue-800 transition-colors"
+                                  title={isExpanded ? 'Ocultar comentario' : 'Ver comentario'}
+                                >
+                                  {isExpanded
+                                    ? <EyeOff className="h-3.5 w-3.5" />
+                                    : <Eye className="h-3.5 w-3.5" />}
+                                  {isExpanded ? 'Ocultar' : 'Comentario'}
+                                </button>
+                              )}
+                            </div>
                           </div>
 
-                          {/* Costo */}
-                          <div className="shrink-0 text-right">
-                            <p className="text-sm font-bold">{effectiveHrs.toFixed(1)}h ef.</p>
-                            <p className="text-xs text-muted-foreground">{formatCLP(Math.round(cost))}</p>
-                          </div>
+                          {/* Comentario expandido */}
+                          {isExpanded && hasComment && (
+                            <div className="ml-[72px] rounded-md border border-blue-100 bg-blue-50 px-3 py-2 flex items-start gap-2">
+                              <MessageSquare className="h-3.5 w-3.5 text-blue-500 shrink-0 mt-0.5" />
+                              <p className="text-xs text-blue-900 leading-relaxed whitespace-pre-wrap">
+                                {r.approvalComment}
+                              </p>
+                            </div>
+                          )}
                         </div>
                       );
                     })}
