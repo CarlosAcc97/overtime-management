@@ -55,12 +55,16 @@ export const getMonthRange = (dateStr) => {
 };
 
 /**
- * Verifica si dos rangos de tiempo se superponen
+ * Verifica si dos rangos de tiempo se superponen.
+ * Soporta cruces de medianoche (ej: 20:00 – 00:36).
  */
 export const timesOverlap = (start1, end1, start2, end2) => {
   const toMin = (t) => { const [h, m] = t.split(':').map(Number); return h * 60 + m; };
-  const s1 = toMin(start1), e1 = toMin(end1);
-  const s2 = toMin(start2), e2 = toMin(end2);
+  let s1 = toMin(start1), e1 = toMin(end1);
+  let s2 = toMin(start2), e2 = toMin(end2);
+  // Normalizar cruce de medianoche: si término < inicio, el turno cruza la medianoche
+  if (e1 <= s1) e1 += 24 * 60;
+  if (e2 <= s2) e2 += 24 * 60;
   return s1 < e2 && s2 < e1;
 };
 
