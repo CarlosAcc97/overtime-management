@@ -23,7 +23,7 @@ import {
 } from '@/components/ui/select';
 import {
   CheckSquare, XCircle, MessageSquare, Eye, RefreshCw,
-  AlertTriangle, Clock, CheckCircle, Calendar, Tag,
+  AlertTriangle, Clock, CheckCircle, Calendar, Tag, Search, X,
 } from 'lucide-react';
 import { formatHoursDecimal, formatOvertimeType, formatStatus } from '@/utils/formatters';
 import { useAuth } from '@/context/AuthContext';
@@ -267,6 +267,7 @@ export default function ApprovalInbox() {
   const [actionTarget, setActionTarget] = useState(null); // { record, action: 'reject'|'clarify' }
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
+  const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
 
   const { data, isLoading, isError, refetch } = useQuery({
@@ -280,8 +281,16 @@ export default function ApprovalInbox() {
     queryFn: approvalService.getApprovalStats,
   });
 
-  const records = data?.data ?? [];
-  const pagination = data?.pagination;
+  const allRecords = data?.data ?? [];
+  const pagination  = data?.pagination;
+
+  // Filtro local por nombre de funcionario (no requiere roundtrip al servidor)
+  const records = search.trim()
+    ? allRecords.filter(r => {
+        const fullName = `${r.user?.firstName ?? ''} ${r.user?.lastName ?? ''}`.toLowerCase();
+        return fullName.includes(search.trim().toLowerCase());
+      })
+    : allRecords;
 
   const handleActionSuccess = () => {
     queryClient.invalidateQueries({ queryKey: ['approvals'] });
@@ -334,15 +343,37 @@ export default function ApprovalInbox() {
         </div>
       )}
 
-      {/* Filtros de fecha */}
-      <div className="flex items-center gap-2 flex-wrap">
-        <Calendar className="h-4 w-4 text-muted-foreground shrink-0" />
-        <Input type="date" value={dateFrom} onChange={e => { setDateFrom(e.target.value); setPage(1); }} className="w-40" />
-        <span className="text-muted-foreground text-sm">—</span>
-        <Input type="date" value={dateTo} onChange={e => { setDateTo(e.target.value); setPage(1); }} className="w-40" />
-        {(dateFrom || dateTo) && (
-          <Button variant="ghost" size="sm" onClick={() => { setDateFrom(''); setDateTo(''); }}>Limpiar</Button>
-        )}
+      {/* Filtros */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
+        {/* Búsqueda por funcionario */}
+        <div className="relative flex-1 min-w-[200px] max-w-xs">
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+          <Input
+            placeholder="Buscar funcionario..."
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            className="pl-8 pr-8"
+          />
+          {search && (
+            <button
+              onClick={() => setSearch('')}
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          )}
+        </div>
+
+        {/* Filtro de fechas */}
+        <div className="flex items-center gap-2">
+          <Calendar className="h-4 w-4 text-muted-foreground shrink-0" />
+          <Input type="date" value={dateFrom} onChange={e => { setDateFrom(e.target.value); setPage(1); }} className="w-40" />
+          <span className="text-muted-foreground text-sm">—</span>
+          <Input type="date" value={dateTo} onChange={e => { setDateTo(e.target.value); setPage(1); }} className="w-40" />
+          {(dateFrom || dateTo) && (
+            <Button variant="ghost" size="sm" onClick={() => { setDateFrom(''); setDateTo(''); }}>Limpiar</Button>
+          )}
+        </div>
       </div>
 
       {/* Tabla */}
@@ -372,9 +403,20 @@ export default function ApprovalInbox() {
                   <tr>
                     <td colSpan={7} className="py-16 text-center">
                       <div className="flex flex-col items-center gap-2 text-muted-foreground">
-                        <CheckCircle className="h-10 w-10 opacity-30" />
-                        <p className="font-medium">Sin registros pendientes</p>
-                        <p className="text-xs">No hay registros que requieran tu acción en este momento</p>
+                        {search ? (
+                          <>
+                            <Search className="h-10 w-10 opacity-30" />
+                            <p className="font-medium">Sin resultados para "{search}"</p>
+                            <p className="text-xs">Intenta con otro nombre o limpia la búsqueda</p>
+                            <Button variant="ghost" size="sm" onClick={() => setSearch('')}>Limpiar búsqueda</Button>
+                          </>
+                        ) : (
+                          <>
+                            <CheckCircle className="h-10 w-10 opacity-30" />
+                            <p className="font-medium">Sin registros pendientes</p>
+                            <p className="text-xs">No hay registros que requieran tu acción en este momento</p>
+                          </>
+                        )}
                       </div>
                     </td>
                   </tr>
