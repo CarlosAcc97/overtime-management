@@ -161,10 +161,35 @@ router.get('/kpis', anyRole, async (req, res) => {
     .select({ count: sql`count(*)` })
     .from(overtimeRecords).where(addScope(...alertConds));
 
+  // Distribución de horas por estado en el período
+  const dateRangeConds = start ? [gte(overtimeRecords.date, start), lte(overtimeRecords.date, end)] : [];
+  const excludeAnulado = notInArray(overtimeRecords.status, [STATUS.ANULADO]);
+
+  const [approvedH] = await db
+    .select({ h: sql`COALESCE(SUM(hours_calculated),0)` })
+    .from(overtimeRecords)
+    .where(addScope(eq(overtimeRecords.status, STATUS.APROBADO), excludeAnulado, ...dateRangeConds));
+
+  const [pendingH] = await db
+    .select({ h: sql`COALESCE(SUM(hours_calculated),0)` })
+    .from(overtimeRecords)
+    .where(addScope(
+      inArray(overtimeRecords.status, [STATUS.PENDIENTE, STATUS.ACLARACION_SOLICITADA, STATUS.RETENIDO]),
+      excludeAnulado, ...dateRangeConds,
+    ));
+
+  const [rejectedH] = await db
+    .select({ h: sql`COALESCE(SUM(hours_calculated),0)` })
+    .from(overtimeRecords)
+    .where(addScope(eq(overtimeRecords.status, STATUS.RECHAZADO), ...dateRangeConds));
+
   ok(res, {
     monthHours:    parseFloat(totalPeriod?.h ?? 0),
     monthRecords:  Number(totalPeriod?.c ?? 0),
     trend,
+    approvedHours:  parseFloat(approvedH?.h  ?? 0),
+    pendingHours:   parseFloat(pendingH?.h   ?? 0),
+    rejectedHours:  parseFloat(rejectedH?.h  ?? 0),
     pendingCount:  Number(pending?.count ?? 0),
     approvedMonth: Number(approved?.count ?? 0),
     retainedCount: Number(retained?.count ?? 0),

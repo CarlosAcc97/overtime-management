@@ -310,8 +310,15 @@ function EmployeeCalendarModal({ employee, filters, open, onClose }) {
                     ) : selectedRecs.map((r) => {
                       const effectiveHrs = r.hoursCalculated * (r.factor ?? 1);
                       const cost = effectiveHrs * (data?.employee?.hourlyRate ?? 5000);
-                      const isExpanded = expandedComments.has(r.id);
-                      const hasComment = !!r.approvalComment;
+                      const isExpanded        = expandedComments.has(r.id);
+                      const hasComment        = !!r.approvalComment;
+                      const hasRejection      = !!r.rejectionComment;
+                      const isRejExpanded     = expandedComments.has(`rej-${r.id}`);
+                      const toggleRejComment  = () => setExpandedComments(prev => {
+                        const next = new Set(prev);
+                        next.has(`rej-${r.id}`) ? next.delete(`rej-${r.id}`) : next.add(`rej-${r.id}`);
+                        return next;
+                      });
                       return (
                         <div key={r.id} className="px-4 py-3 space-y-2">
                           {/* Fila principal */}
@@ -364,23 +371,40 @@ function EmployeeCalendarModal({ employee, filters, open, onClose }) {
                                 <button
                                   onClick={() => toggleComment(r.id)}
                                   className="flex items-center gap-1 text-[10px] text-blue-600 hover:text-blue-800 transition-colors"
-                                  title={isExpanded ? 'Ocultar comentario' : 'Ver comentario'}
+                                  title={isExpanded ? 'Ocultar comentario de aprobación' : 'Ver comentario de aprobación'}
                                 >
-                                  {isExpanded
-                                    ? <EyeOff className="h-3.5 w-3.5" />
-                                    : <Eye className="h-3.5 w-3.5" />}
-                                  {isExpanded ? 'Ocultar' : 'Comentario'}
+                                  {isExpanded ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                                  {isExpanded ? 'Ocultar' : 'Aprobación'}
+                                </button>
+                              )}
+                              {hasRejection && (
+                                <button
+                                  onClick={toggleRejComment}
+                                  className="flex items-center gap-1 text-[10px] text-red-600 hover:text-red-800 transition-colors"
+                                  title={isRejExpanded ? 'Ocultar motivo de rechazo' : 'Ver motivo de rechazo'}
+                                >
+                                  {isRejExpanded ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                                  {isRejExpanded ? 'Ocultar' : 'Rechazo'}
                                 </button>
                               )}
                             </div>
                           </div>
 
-                          {/* Comentario expandido */}
+                          {/* Comentario de aprobación expandido */}
                           {isExpanded && hasComment && (
                             <div className="ml-[72px] rounded-md border border-blue-100 bg-blue-50 px-3 py-2 flex items-start gap-2">
                               <MessageSquare className="h-3.5 w-3.5 text-blue-500 shrink-0 mt-0.5" />
                               <p className="text-xs text-blue-900 leading-relaxed whitespace-pre-wrap">
                                 {r.approvalComment}
+                              </p>
+                            </div>
+                          )}
+                          {/* Motivo de rechazo expandido */}
+                          {isRejExpanded && hasRejection && (
+                            <div className="ml-[72px] rounded-md border border-red-100 bg-red-50 px-3 py-2 flex items-start gap-2">
+                              <MessageSquare className="h-3.5 w-3.5 text-red-500 shrink-0 mt-0.5" />
+                              <p className="text-xs text-red-900 leading-relaxed whitespace-pre-wrap">
+                                {r.rejectionComment}
                               </p>
                             </div>
                           )}
@@ -665,9 +689,10 @@ export default function Reports() {
                     <th className="px-4 py-3 font-medium text-muted-foreground hidden md:table-cell">Departamento</th>
                     <th className="px-4 py-3 font-medium text-muted-foreground text-right">Registros</th>
                     <th className="px-4 py-3 font-medium text-muted-foreground text-right">Hrs totales</th>
-                    <th className="px-4 py-3 font-medium text-muted-foreground text-right">Hrs efectivas</th>
-                    <th className="px-4 py-3 font-medium text-muted-foreground text-right">Aprobadas</th>
-                    <th className="px-4 py-3 font-medium text-muted-foreground text-right">Pendientes</th>
+                    <th className="px-4 py-3 font-medium text-muted-foreground text-right hidden xl:table-cell">Hrs efectivas</th>
+                    <th className="px-4 py-3 font-medium text-emerald-700 text-right">Aprobadas</th>
+                    <th className="px-4 py-3 font-medium text-amber-600 text-right">Pendientes</th>
+                    <th className="px-4 py-3 font-medium text-red-600 text-right">Rechazadas</th>
                     <th className="px-4 py-3 font-medium text-muted-foreground hidden lg:table-cell">Por tipo</th>
                     <th className="px-4 py-3 font-medium text-muted-foreground text-right">Costo est.</th>
                   </tr>
@@ -708,14 +733,17 @@ export default function Reports() {
                       <td className="px-4 py-3 text-right tabular-nums font-medium">
                         {formatHoursDecimal(emp.totalHours)}
                       </td>
-                      <td className="px-4 py-3 text-right tabular-nums">
+                      <td className="px-4 py-3 text-right tabular-nums hidden xl:table-cell">
                         {formatHoursDecimal(emp.effectiveHours)}
                       </td>
-                      <td className="px-4 py-3 text-right tabular-nums text-emerald-700">
+                      <td className="px-4 py-3 text-right tabular-nums text-emerald-700 font-medium">
                         {formatHoursDecimal(emp.approvedHours)}
                       </td>
                       <td className="px-4 py-3 text-right tabular-nums text-amber-600">
                         {formatHoursDecimal(emp.pendingHours)}
+                      </td>
+                      <td className="px-4 py-3 text-right tabular-nums text-red-600">
+                        {formatHoursDecimal(emp.rejectedHours ?? 0)}
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex flex-wrap gap-1">
@@ -743,8 +771,11 @@ export default function Reports() {
                       <td className="hidden md:table-cell" />
                       <td className="px-4 py-3 text-right font-bold tabular-nums">{totals.records}</td>
                       <td className="px-4 py-3 text-right font-bold tabular-nums">{formatHoursDecimal(totals.totalHours)}</td>
-                      <td className="px-4 py-3 text-right font-bold tabular-nums">{formatHoursDecimal(totals.effectiveHours)}</td>
-                      <td colSpan={3} />
+                      <td className="px-4 py-3 text-right font-bold tabular-nums hidden xl:table-cell">{formatHoursDecimal(totals.effectiveHours)}</td>
+                      <td className="px-4 py-3 text-right font-bold tabular-nums text-emerald-700">{formatHoursDecimal(totals.approvedHours ?? 0)}</td>
+                      <td className="px-4 py-3 text-right font-bold tabular-nums text-amber-600">{formatHoursDecimal(totals.pendingHours ?? 0)}</td>
+                      <td className="px-4 py-3 text-right font-bold tabular-nums text-red-600">{formatHoursDecimal(totals.rejectedHours ?? 0)}</td>
+                      <td className="hidden lg:table-cell" />
                       <td className="px-4 py-3 text-right font-bold tabular-nums">{formatCLP(totals.estimatedCost)}</td>
                     </tr>
                   </tfoot>

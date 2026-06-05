@@ -29,10 +29,9 @@ const STATUS_LABELS = {
 const buildWhere = async (requester, { dateFrom, dateTo, status, userId, departmentId } = {}) => {
   const conditions = [];
 
-  // Si no hay filtro de estado explícito, excluir anulados y rechazados del reporte
-  // (igual que el dashboard — solo cuentan los registros activos)
+  // Sin filtro de estado explícito: excluir solo ANULADO (RECHAZADO sí cuenta)
   if (!status) {
-    conditions.push(notInArray(overtimeRecords.status, [STATUS.ANULADO, STATUS.RECHAZADO]));
+    conditions.push(notInArray(overtimeRecords.status, [STATUS.ANULADO]));
   }
 
   // Scope por rol + filtro de departamento
@@ -261,7 +260,7 @@ router.get('/summary', async (req, res) => {
         departmentId: r.emp?.departmentId ?? null,
         department: r.emp?.departmentId ? (deptMap[r.emp.departmentId] ?? null) : null,
         totalHours: 0, effectiveHours: 0, records: 0,
-        approvedHours: 0, pendingHours: 0, estimatedCost: 0,
+        approvedHours: 0, pendingHours: 0, rejectedHours: 0, estimatedCost: 0,
         byType: {},
       };
     }
@@ -270,8 +269,10 @@ router.get('/summary', async (req, res) => {
     e.effectiveHours += r.hoursCalculated * r.factor;
     e.records += 1;
     e.estimatedCost += r.hoursCalculated * r.factor * (r.emp?.hourlyRate ?? 5000);
-    if (r.status === STATUS.APROBADO) e.approvedHours += r.hoursCalculated;
-    if (r.status === STATUS.PENDIENTE) e.pendingHours += r.hoursCalculated;
+    if (r.status === STATUS.APROBADO)  e.approvedHours  += r.hoursCalculated;
+    if ([STATUS.PENDIENTE, STATUS.ACLARACION_SOLICITADA, STATUS.RETENIDO].includes(r.status))
+      e.pendingHours += r.hoursCalculated;
+    if (r.status === STATUS.RECHAZADO) e.rejectedHours += r.hoursCalculated;
     e.byType[r.overtimeType] = (e.byType[r.overtimeType] ?? 0) + r.hoursCalculated;
   }
 
@@ -279,11 +280,14 @@ router.get('/summary', async (req, res) => {
     .map(e => ({ ...e, totalHours: +e.totalHours.toFixed(2), effectiveHours: +e.effectiveHours.toFixed(2), estimatedCost: Math.round(e.estimatedCost) }));
 
   const totals = employees.reduce((acc, e) => ({
-    totalHours: acc.totalHours + e.totalHours,
+    totalHours:    acc.totalHours    + e.totalHours,
     effectiveHours: acc.effectiveHours + e.effectiveHours,
-    estimatedCost: acc.estimatedCost + e.estimatedCost,
-    records: acc.records + e.records,
-  }), { totalHours: 0, effectiveHours: 0, estimatedCost: 0, records: 0 });
+    approvedHours:  acc.approvedHours  + e.approvedHours,
+    pendingHours:   acc.pendingHours   + e.pendingHours,
+    rejectedHours:  acc.rejectedHours  + e.rejectedHours,
+    estimatedCost:  acc.estimatedCost  + e.estimatedCost,
+    records:        acc.records        + e.records,
+  }), { totalHours: 0, effectiveHours: 0, approvedHours: 0, pendingHours: 0, rejectedHours: 0, estimatedCost: 0, records: 0 });
 
   res.json({
     success: true, data: {
@@ -349,18 +353,25 @@ router.get('/employee-detail', async (req, res) => {
     .where(and(...conditions))
     .orderBy(overtimeRecords.date, overtimeRecords.startTime);
 
-  // Obtener comentarios de aprobación en una sola consulta (sin Promise.all — Turso)
+  // Obtener comentarios de aprobación Y rechazo en una sola consulta (sin Promise.all — Turso)
   const recordIds = rows.map(r => r.id);
-  const approvalCommentMap = {};
+  const approvalCommentMap  = {};
+  const rejectionCommentMap = {};
   if (recordIds.length > 0) {
     const approvalRows = await db
-      .select({ overtimeRecordId: approvals.overtimeRecordId, comment: approvals.comment })
+      .select({ overtimeRecordId: approvals.overtimeRecordId, comment: approvals.comment, action: approvals.action })
       .from(approvals)
-      .where(and(inArray(approvals.overtimeRecordId, recordIds), eq(approvals.action, 'APROBAR')))
+      .where(and(
+        inArray(approvals.overtimeRecordId, recordIds),
+        inArray(approvals.action, ['APROBAR', 'RECHAZAR']),
+      ))
       .orderBy(approvals.createdAt);
     for (const a of approvalRows) {
-      if (!approvalCommentMap[a.overtimeRecordId]) {
+      if (a.action === 'APROBAR' && !approvalCommentMap[a.overtimeRecordId]) {
         approvalCommentMap[a.overtimeRecordId] = a.comment;
+      }
+      if (a.action === 'RECHAZAR' && !rejectionCommentMap[a.overtimeRecordId]) {
+        rejectionCommentMap[a.overtimeRecordId] = a.comment;
       }
     }
   }
@@ -372,7 +383,8 @@ router.get('/employee-detail', async (req, res) => {
     byDay[r.date].push({
       ...r,
       cc: r.ccCode ? { code: r.ccCode, name: r.ccName } : null,
-      approvalComment: approvalCommentMap[r.id] ?? null,
+      approvalComment:  approvalCommentMap[r.id]  ?? null,
+      rejectionComment: rejectionCommentMap[r.id] ?? null,
     });
   }
 

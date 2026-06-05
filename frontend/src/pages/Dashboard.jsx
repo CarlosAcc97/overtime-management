@@ -176,6 +176,46 @@ export default function Dashboard() {
         />
       </div>
 
+      {/* Distribución de horas por estado */}
+      {kpis && (kpis.approvedHours > 0 || kpis.pendingHours > 0 || kpis.rejectedHours > 0) && (
+        <Card>
+          <CardContent className="p-4">
+            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-3">
+              Distribución de horas — {PERIOD_LABELS[period]}
+            </p>
+            <div className="grid grid-cols-3 gap-3">
+              <div className="flex items-center gap-2.5">
+                <div className="h-8 w-8 flex items-center justify-center rounded-full bg-emerald-100 shrink-0">
+                  <CheckCircle className="h-4 w-4 text-emerald-600" />
+                </div>
+                <div>
+                  <p className="text-lg font-bold text-emerald-700">{formatHoursDecimal(kpis.approvedHours)}</p>
+                  <p className="text-[11px] text-muted-foreground">Aprobadas</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2.5">
+                <div className="h-8 w-8 flex items-center justify-center rounded-full bg-amber-100 shrink-0">
+                  <AlertTriangle className="h-4 w-4 text-amber-600" />
+                </div>
+                <div>
+                  <p className="text-lg font-bold text-amber-700">{formatHoursDecimal(kpis.pendingHours)}</p>
+                  <p className="text-[11px] text-muted-foreground">Pendientes</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2.5">
+                <div className="h-8 w-8 flex items-center justify-center rounded-full bg-red-100 shrink-0">
+                  <TrendingDown className="h-4 w-4 text-red-600" />
+                </div>
+                <div>
+                  <p className="text-lg font-bold text-red-700">{formatHoursDecimal(kpis.rejectedHours)}</p>
+                  <p className="text-[11px] text-muted-foreground">Rechazadas</p>
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Proyección de costo — solo admin */}
       {isAdmin && costProj && (
         <Card className="border-blue-100 bg-blue-50">
