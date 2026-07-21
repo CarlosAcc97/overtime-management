@@ -62,17 +62,42 @@
 
 /* ── Estilos de impresión (página de Reportes) ────────────────────────────── */
 @media print {
-  /* Ocultar sidebar, header y elementos .print:hidden */
+  /* 1. Anular los contenedores con altura fija / scroll que recortaban el
+        contenido a una sola pantalla (AppLayout usa h-screen + overflow-hidden). */
+  html, body, #root { height: auto !important; overflow: visible !important; }
+  .h-screen { height: auto !important; }
+  .overflow-hidden { overflow: visible !important; }
+  .overflow-y-auto, .overflow-x-auto { overflow: visible !important; }
+
+  /* 2. Ocultar navegación, cabecera y todo lo marcado como print:hidden */
   nav, header, aside, [class*="sidebar"], .print\:hidden { display: none !important; }
-  /* Mostrar elementos .print:block */
   .print\:block { display: block !important; }
-  /* Ajustar layout para impresión */
-  body { background: white !important; font-size: 11px; }
+
+  /* 3. Ajustes generales de página */
+  body {
+    background: white !important;
+    font-size: 10px;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
   main { padding: 0 !important; overflow: visible !important; }
-  .space-y-6 > * + * { margin-top: 1rem; }
-  /* Tabla sin color de fondo en hover */
-  tr:hover { background: transparent !important; }
-  /* Salto de página si la tabla es muy larga */
-  table { page-break-inside: auto; }
+  .space-y-6 > * + * { margin-top: 0.75rem; }
+  [class*="shadow"] { box-shadow: none !important; }
+
+  /* 4. Forzar TODAS las columnas de la tabla a mostrarse, aunque estén
+        ocultas por breakpoints responsive (hidden md/lg/xl:table-cell). */
+  main table { width: 100% !important; table-layout: auto; page-break-inside: auto; }
+  main table th, main table td {
+    display: table-cell !important;
+    padding: 4px 6px !important;
+    font-size: 9px !important;
+  }
+
+  /* 5. Saltos de página limpios: repetir cabecera y no cortar filas. */
+  thead { display: table-header-group; }
+  tfoot { display: table-footer-group; }
   tr { page-break-inside: avoid; }
+  tr:hover { background: transparent !important; }
+
+  @page { size: landscape; margin: 1cm; }
 }
