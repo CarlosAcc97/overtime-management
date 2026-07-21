@@ -17,7 +17,7 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 import { PageLoader } from '@/components/common/LoadingSpinner';
-import { Settings, Save, RefreshCw, Info, Clock, DollarSign, AlertTriangle, Trash2, ShieldAlert, Copy, ChevronDown, ChevronUp } from 'lucide-react';
+import { Settings, Save, RefreshCw, Info, Clock, DollarSign, AlertTriangle, Trash2, ShieldAlert, Copy, ChevronDown, ChevronUp, TrendingUp } from 'lucide-react';
 import { getDuplicates, cancelOvertime } from '@/services/overtime.service';
 import { Badge } from '@/components/ui/badge';
 import { StatusBadge } from '@/components/common/StatusBadge';
@@ -32,6 +32,7 @@ const configSchema = z.object({
   default_hourly_rate:       z.coerce.number().min(100, 'Mínimo $100'),
   pending_alert_hours:       z.coerce.number().min(1).max(168, 'Máximo 168 hrs (1 semana)'),
   min_minutes_for_approval:  z.coerce.number().min(1, 'Mínimo 1 minuto').max(120, 'Máximo 120 minutos'),
+  max_period_hours:          z.coerce.number().min(1, 'Mínimo 1 hora').max(100000, 'Valor demasiado alto'),
 }).superRefine((d, ctx) => {
   if (d.max_daily_hours_warning <= d.max_daily_hours_soft) {
     ctx.addIssue({
@@ -89,6 +90,21 @@ const CONFIG_GROUPS = [
     ],
   },
   {
+    title: 'Meta organizacional',
+    icon: TrendingUp,
+    iconColor: 'text-red-500',
+    description: 'Se dibuja como línea de referencia roja en el gráfico de evolución del dashboard.',
+    fields: [
+      {
+        key: 'max_period_hours',
+        label: 'Máximo de horas por período',
+        description: 'Techo de horas extras que la organización no debería superar en un período (ciclo 21 al 20).',
+        unit: 'horas/período',
+        min: 1, max: 100000, step: 50,
+      },
+    ],
+  },
+  {
     title: 'Parámetros generales',
     icon: DollarSign,
     iconColor: 'text-emerald-500',
@@ -138,6 +154,7 @@ export default function SystemConfig() {
       min_minutes_for_approval: 15,
       default_hourly_rate:     5000,
       pending_alert_hours:     48,
+      max_period_hours:        1200,
     },
   });
 
@@ -152,6 +169,7 @@ export default function SystemConfig() {
         min_minutes_for_approval: parseFloat(config.min_minutes_for_approval ?? 15),
         default_hourly_rate:      parseFloat(config.default_hourly_rate      ?? 5000),
         pending_alert_hours:      parseFloat(config.pending_alert_hours      ?? 48),
+        max_period_hours:         parseFloat(config.max_period_hours         ?? 1200),
       });
     }
   }, [config, reset]);

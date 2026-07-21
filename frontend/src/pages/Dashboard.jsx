@@ -2,9 +2,10 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
   BarChart, Bar, LineChart, Line, PieChart, Pie, Cell,
-  XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
+  XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine,
 } from 'recharts';
 import * as dashboardService from '@/services/dashboard.service';
+import { getSystemConfig } from '@/services/users.service';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { PageLoader } from '@/components/common/LoadingSpinner';
@@ -112,6 +113,15 @@ export default function Dashboard() {
     queryFn: () => dashboardService.getCostProjection(period),
     enabled: isAdmin,
   });
+
+  // Meta máxima de horas por período — configurable en Configuración del sistema
+  const { data: sysConfig } = useQuery({
+    queryKey: ['system-config'],
+    queryFn: getSystemConfig,
+    staleTime: 5 * 60 * 1000,
+    enabled: isJefaturaOrAdmin,
+  });
+  const maxPeriodHours = parseFloat(sysConfig?.max_period_hours ?? 1200);
 
   if (kpisLoading) return <PageLoader />;
 
@@ -237,20 +247,47 @@ export default function Dashboard() {
         <>
           {/* Tendencia por período */}
           <Card>
-            <CardHeader>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0">
               <CardTitle className="text-base">{TREND_TITLES[period]}</CardTitle>
+              {maxPeriodHours > 0 && (
+                <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                  <span className="inline-block h-0 w-5 border-t-2 border-dashed border-red-500" />
+                  Máximo {formatHoursDecimal(maxPeriodHours)} por período
+                </span>
+              )}
             </CardHeader>
             <CardContent>
               {trend.length === 0 ? (
                 <div className="flex items-center justify-center h-32 text-muted-foreground text-sm">Sin datos suficientes</div>
               ) : (
                 <ResponsiveContainer width="100%" height={220}>
-                  <LineChart data={trend} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
+                  <LineChart data={trend} margin={{ top: 15, right: 20, left: 0, bottom: 5 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                     <XAxis dataKey="month" tick={{ fontSize: 11 }} />
-                    <YAxis tick={{ fontSize: 11 }} />
+                    {/* El dominio incluye la meta para que la línea siempre sea visible */}
+                    <YAxis
+                      tick={{ fontSize: 11 }}
+                      domain={[0, (dataMax) => Math.ceil(Math.max(dataMax, maxPeriodHours) * 1.1)]}
+                      allowDecimals={false}
+                    />
                     <Tooltip content={<CustomTooltip />} />
                     <Legend wrapperStyle={{ fontSize: 12 }} />
+                    {maxPeriodHours > 0 && (
+                      <ReferenceLine
+                        y={maxPeriodHours}
+                        stroke="#ef4444"
+                        strokeDasharray="6 4"
+                        strokeWidth={2}
+                        ifOverflow="extendDomain"
+                        label={{
+                          value: `Máx. ${maxPeriodHours} hrs`,
+                          position: 'insideTopRight',
+                          fill: '#ef4444',
+                          fontSize: 11,
+                          fontWeight: 600,
+                        }}
+                      />
+                    )}
                     <Line type="monotone" dataKey="horas" name="Horas" stroke="#3b82f6" strokeWidth={2} dot={{ r: 4 }} />
                     <Line type="monotone" dataKey="aprobados" name="Aprobados" stroke="#10b981" strokeWidth={2} strokeDasharray="5 5" dot={{ r: 3 }} />
                   </LineChart>

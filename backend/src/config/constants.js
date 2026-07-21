@@ -57,6 +57,7 @@ export const DEFAULT_CONFIG = {
   default_hourly_rate: '5000',        // valor hora base en CLP (para proyecciones)
   pending_alert_hours: '48',          // alerta si pendiente > N horas
   min_minutes_for_approval: '15',     // mínimo de minutos para requerir aprobación de jefatura
+  max_period_hours: '1200',           // meta máx. de horas extras por período (línea de referencia en el gráfico)
 };
 
 // ─── Zona horaria del sistema ─────────────────────────────────────────────────
