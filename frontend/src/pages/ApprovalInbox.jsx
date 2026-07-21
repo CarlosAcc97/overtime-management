@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
@@ -268,11 +268,27 @@ export default function ApprovalInbox() {
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
   const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [page, setPage] = useState(1);
 
+  // Debounce de la búsqueda — evita una consulta por cada tecla y resetea a la
+  // página 1 cuando cambia el término.
+  useEffect(() => {
+    const t = setTimeout(() => {
+      setDebouncedSearch(search.trim());
+      setPage(1);
+    }, 350);
+    return () => clearTimeout(t);
+  }, [search]);
+
   const { data, isLoading, isError, refetch } = useQuery({
-    queryKey: ['approvals', { page, dateFrom, dateTo }],
-    queryFn: () => approvalService.getPendingApprovals({ page, limit: 15, dateFrom: dateFrom || undefined, dateTo: dateTo || undefined }),
+    queryKey: ['approvals', { page, dateFrom, dateTo, search: debouncedSearch }],
+    queryFn: () => approvalService.getPendingApprovals({
+      page, limit: 15,
+      dateFrom: dateFrom || undefined,
+      dateTo: dateTo || undefined,
+      search: debouncedSearch || undefined,
+    }),
     keepPreviousData: true,
   });
 
@@ -281,16 +297,10 @@ export default function ApprovalInbox() {
     queryFn: approvalService.getApprovalStats,
   });
 
-  const allRecords = data?.data ?? [];
-  const pagination  = data?.pagination;
-
-  // Filtro local por nombre de funcionario (no requiere roundtrip al servidor)
-  const records = search.trim()
-    ? allRecords.filter(r => {
-        const fullName = `${r.user?.firstName ?? ''} ${r.user?.lastName ?? ''}`.toLowerCase();
-        return fullName.includes(search.trim().toLowerCase());
-      })
-    : allRecords;
+  // La búsqueda se resuelve en el servidor sobre TODOS los pendientes,
+  // por eso paginación y resultados ya vienen filtrados.
+  const records    = data?.data ?? [];
+  const pagination = data?.pagination;
 
   const handleActionSuccess = () => {
     queryClient.invalidateQueries({ queryKey: ['approvals'] });

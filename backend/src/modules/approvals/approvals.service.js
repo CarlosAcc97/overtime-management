@@ -69,7 +69,7 @@ const checkJefaturaCanApprove = async (record, requester) => {
 };
 
 // ─── Bandeja: registros pendientes de acción ──────────────────────────────────
-export const getPendingForApproval = async (requester, { page = 1, limit = 20, dateFrom, dateTo } = {}) => {
+export const getPendingForApproval = async (requester, { page = 1, limit = 20, dateFrom, dateTo, search } = {}) => {
   const offset = (page - 1) * limit;
   const conditions = [];
 
@@ -97,6 +97,17 @@ export const getPendingForApproval = async (requester, { page = 1, limit = 20, d
 
   if (dateFrom) conditions.push(sql`${overtimeRecords.date} >= ${dateFrom}`);
   if (dateTo) conditions.push(sql`${overtimeRecords.date} <= ${dateTo}`);
+
+  // Búsqueda por nombre de funcionario — filtra sobre TODOS los pendientes
+  // (no solo la página actual) resolviendo primero los userId que coinciden.
+  if (search && search.trim()) {
+    const term = `%${search.trim().toLowerCase()}%`;
+    const matched = await db.select({ id: users.id }).from(users)
+      .where(sql`lower(${users.firstName} || ' ' || ${users.lastName}) LIKE ${term}`);
+    const matchedIds = matched.map(u => u.id);
+    if (matchedIds.length === 0) return { data: [], total: 0, page, limit };
+    conditions.push(inArray(overtimeRecords.userId, matchedIds));
+  }
 
   const where = conditions.length ? and(...conditions) : undefined;
 

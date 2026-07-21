@@ -36,12 +36,13 @@ const actionSchema = z.object({
 
 // ─── Bandeja pendiente ────────────────────────────────────────────────────────
 router.get('/', onlyJefaturaOrAdmin, async (req, res) => {
-  const { page = 1, limit = 20, dateFrom, dateTo } = req.query;
+  const { page = 1, limit = 20, dateFrom, dateTo, search } = req.query;
   const result = await service.getPendingForApproval(req.user, {
     page: parseInt(page),
     limit: parseInt(limit),
     dateFrom,
     dateTo,
+    search,
   });
   paginated(res, result.data, { page: result.page, limit: result.limit, total: result.total });
 });

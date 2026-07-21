@@ -75,32 +75,63 @@ const buildWhere = async (requester, { dateFrom, dateTo, status, userId, departm
   return conditions.length ? and(...conditions) : undefined;
 };
 
+// inArray por lotes — evita el límite de variables de SQLite y mantiene
+// consultas secuenciales (Turso/libsql no soporta concurrencia).
+const CHUNK = 400;
+const selectByIds = async (idList, queryFn) => {
+  const out = [];
+  for (let i = 0; i < idList.length; i += CHUNK) {
+    out.push(...await queryFn(idList.slice(i, i + CHUNK)));
+  }
+  return out;
+};
+
 const fetchRecords = async (where) => {
   const rows = await db.select().from(overtimeRecords)
     .where(where)
     .orderBy(desc(overtimeRecords.date), desc(overtimeRecords.createdAt));
 
-  // Consultas secuenciales — libsql/SQLite no soporta concurrencia (no Promise.all)
-  const enriched = [];
-  for (const r of rows) {
-    const [emp] = await db.select({
-      firstName: users.firstName, lastName: users.lastName,
-      employeeId: users.employeeId, email: users.email, hourlyRate: users.hourlyRate,
-      departmentId: users.departmentId,
-    }).from(users).where(eq(users.id, r.userId)).limit(1);
+  if (rows.length === 0) return [];
 
-    const [cc] = r.costCenterId
-      ? await db.select({ code: costCenters.code, name: costCenters.name }).from(costCenters).where(eq(costCenters.id, r.costCenterId)).limit(1)
-      : [null];
+  // ── Batch de relaciones: 3 consultas totales en vez de 3 por registro ──
+  // Funcionarios
+  const userIds = [...new Set(rows.map(r => r.userId))];
+  const usersList = await selectByIds(userIds, (ids) => db.select({
+    id: users.id, firstName: users.firstName, lastName: users.lastName,
+    employeeId: users.employeeId, email: users.email, hourlyRate: users.hourlyRate,
+    departmentId: users.departmentId,
+  }).from(users).where(inArray(users.id, ids)));
+  const userMap = Object.fromEntries(usersList.map(u => [u.id, u]));
 
-    const [firstApproval] = await db.select({ comment: approvals.comment, createdAt: approvals.createdAt })
-      .from(approvals)
-      .where(and(eq(approvals.overtimeRecordId, r.id), eq(approvals.action, 'APROBAR')))
-      .orderBy(approvals.createdAt).limit(1);
+  // Centros de costo
+  const ccIds = [...new Set(rows.map(r => r.costCenterId).filter(Boolean))];
+  const ccList = ccIds.length
+    ? await selectByIds(ccIds, (ids) => db.select({
+        id: costCenters.id, code: costCenters.code, name: costCenters.name,
+      }).from(costCenters).where(inArray(costCenters.id, ids)))
+    : [];
+  const ccMap = Object.fromEntries(ccList.map(c => [c.id, c]));
 
-    enriched.push({ ...r, emp: emp || {}, cc: cc || {}, firstApproval: firstApproval || null });
+  // Primer comentario de aprobación por registro
+  const recordIds = rows.map(r => r.id);
+  const approvalRows = await selectByIds(recordIds, (ids) => db.select({
+    overtimeRecordId: approvals.overtimeRecordId, comment: approvals.comment, createdAt: approvals.createdAt,
+  }).from(approvals)
+    .where(and(inArray(approvals.overtimeRecordId, ids), eq(approvals.action, 'APROBAR')))
+    .orderBy(approvals.createdAt));
+  const approvalMap = {};
+  for (const a of approvalRows) {
+    if (!approvalMap[a.overtimeRecordId]) {
+      approvalMap[a.overtimeRecordId] = { comment: a.comment, createdAt: a.createdAt };
+    }
   }
-  return enriched;
+
+  return rows.map(r => ({
+    ...r,
+    emp: userMap[r.userId] || {},
+    cc: r.costCenterId ? (ccMap[r.costCenterId] || {}) : {},
+    firstApproval: approvalMap[r.id] || null,
+  }));
 };
 
 // ─── Excel export ─────────────────────────────────────────────────────────────
