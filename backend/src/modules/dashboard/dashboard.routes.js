@@ -188,6 +188,52 @@ router.get('/kpis', anyRole, async (req, res) => {
     .from(overtimeRecords)
     .where(addScope(eq(overtimeRecords.status, STATUS.RECHAZADO), ...dateRangeConds));
 
+  // ── Tarifas por funcionario (mapa en memoria para calcular costos) ──────────
+  const rateRows = await db.select({ id: users.id, hourlyRate: users.hourlyRate }).from(users);
+  const rateMap  = Object.fromEntries(rateRows.map(u => [u.id, u.hourlyRate ?? 5000]));
+
+  // ── Costo del período SELECCIONADO (horas ponderadas × tarifa) ──────────────
+  const costConds = start
+    ? [gte(overtimeRecords.date, start), lte(overtimeRecords.date, end), exclude]
+    : [exclude];
+  const costRows = await db
+    .select({ userId: overtimeRecords.userId, weighted: sql`COALESCE(SUM(hours_calculated * factor),0)` })
+    .from(overtimeRecords).where(addScope(...costConds))
+    .groupBy(overtimeRecords.userId);
+  let periodCost = 0;
+  for (const r of costRows) periodCost += parseFloat(r.weighted) * (rateMap[r.userId] ?? 5000);
+
+  // ── Proyección del período EN CURSO (ciclo 21→20), proporcional por días ────
+  const now         = new Date();
+  const curStartStr = curStart.toISOString().slice(0, 10);
+  const todayStr    = now.toISOString().slice(0, 10);
+
+  const curRows = await db.select({
+    userId:   overtimeRecords.userId,
+    hours:    sql`COALESCE(SUM(hours_calculated),0)`,
+    weighted: sql`COALESCE(SUM(hours_calculated * factor),0)`,
+  }).from(overtimeRecords)
+    .where(addScope(gte(overtimeRecords.date, curStartStr), lte(overtimeRecords.date, todayStr), exclude))
+    .groupBy(overtimeRecords.userId);
+
+  let curH = 0, curCost = 0;
+  for (const r of curRows) {
+    curH    += parseFloat(r.hours);
+    curCost += parseFloat(r.weighted) * (rateMap[r.userId] ?? 5000);
+  }
+
+  const periodEndFull = new Date(curStart.getFullYear(), curStart.getMonth() + 1, 20);
+  const MS_DAY        = 86400000;
+  const daysElapsed   = Math.max(1, Math.floor((now - curStart) / MS_DAY) + 1);
+  const totalDays     = Math.floor((periodEndFull - curStart) / MS_DAY) + 1;
+  const factorProj    = daysElapsed >= totalDays ? 1 : totalDays / daysElapsed;
+  const projectedHours   = curH * factorProj;
+  const projectedCostCLP = curCost * factorProj;
+
+  // Etiqueta del período en curso: mes de término (el mes siguiente al inicio)
+  const labelDate = new Date(curStart.getFullYear(), curStart.getMonth() + 1, 1);
+  const currentPeriodLabel = labelDate.toLocaleDateString('es-CL', { month: 'long', year: 'numeric' });
+
   ok(res, {
     monthHours:    parseFloat(totalPeriod?.h ?? 0),
     monthRecords:  Number(totalPeriod?.c ?? 0),
@@ -195,6 +241,14 @@ router.get('/kpis', anyRole, async (req, res) => {
     approvedHours:  parseFloat(approvedH?.h  ?? 0),
     pendingHours:   parseFloat(pendingH?.h   ?? 0),
     rejectedHours:  parseFloat(rejectedH?.h  ?? 0),
+    periodCostCLP:      Math.round(periodCost),
+    projectedHours:     parseFloat(projectedHours.toFixed(1)),
+    projectedCostCLP:   Math.round(projectedCostCLP),
+    currentPeriodLabel,
+    currentPeriodStart: curStartStr,
+    currentPeriodEnd:   periodEndFull.toISOString().slice(0, 10),
+    periodDaysElapsed:  daysElapsed,
+    periodTotalDays:    totalDays,
     pendingCount:  Number(pending?.count ?? 0),
     approvedMonth: Number(approved?.count ?? 0),
     retainedCount: Number(retained?.count ?? 0),

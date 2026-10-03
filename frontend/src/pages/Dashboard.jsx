@@ -34,7 +34,7 @@ const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4'
 const TYPE_COLORS = { 'Horas extras': '#3b82f6', 'Super extras': '#f59e0b', 'Especiales': '#ef4444' };
 
 // ─── KPI Card ─────────────────────────────────────────────────────────────────
-const KpiCard = ({ title, value, subtitle, icon: Icon, iconColor = 'text-blue-500', trend }) => (
+const KpiCard = ({ title, value, secondaryValue, subtitle, icon: Icon, iconColor = 'text-blue-500', trend }) => (
   <Card>
     <CardHeader className="flex flex-row items-center justify-between pb-2">
       <CardTitle className="text-sm font-medium text-muted-foreground">{title}</CardTitle>
@@ -42,6 +42,7 @@ const KpiCard = ({ title, value, subtitle, icon: Icon, iconColor = 'text-blue-50
     </CardHeader>
     <CardContent>
       <p className="text-3xl font-bold">{value}</p>
+      {secondaryValue && <div className="mt-0.5">{secondaryValue}</div>}
       <div className="flex items-center gap-1 mt-1">
         {trend !== null && trend !== undefined && (
           <span className={`text-xs font-medium flex items-center gap-0.5 ${parseFloat(trend) > 0 ? 'text-red-500' : 'text-emerald-500'}`}>
@@ -131,6 +132,11 @@ export default function Dashboard() {
       : 0
     : 0;
 
+  // Formato corto de fecha para el rango del período (ej. "21 jun")
+  const fmtShort = (iso) =>
+    iso ? new Date(iso + 'T12:00:00').toLocaleDateString('es-CL', { day: 'numeric', month: 'short' }) : '';
+  const endLabel = fmtShort(kpis?.currentPeriodEnd);
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -138,7 +144,18 @@ export default function Dashboard() {
         <div>
           <h1 className="text-2xl font-bold">Dashboard</h1>
           <p className="text-muted-foreground text-sm mt-0.5">
-            Bienvenido/a, {user?.firstName}. Indicadores — <span className="font-medium text-foreground">{PERIOD_LABELS[period]}</span>
+            Bienvenido/a, {user?.firstName}.{' '}
+            {period === 'mes' && kpis?.currentPeriodLabel ? (
+              <>
+                Período{' '}
+                <span className="font-semibold text-foreground capitalize">{kpis.currentPeriodLabel}</span>
+                {kpis?.currentPeriodStart && (
+                  <span className="text-xs"> · {fmtShort(kpis.currentPeriodStart)} – {endLabel}</span>
+                )}
+              </>
+            ) : (
+              <>Indicadores — <span className="font-medium text-foreground">{PERIOD_LABELS[period]}</span></>
+            )}
           </p>
         </div>
         <Select value={period} onValueChange={setPeriod}>
@@ -158,17 +175,29 @@ export default function Dashboard() {
         <KpiCard
           title={`Horas — ${PERIOD_LABELS[period]}`}
           value={formatHoursDecimal(kpis?.monthHours)}
+          secondaryValue={kpis?.periodCostCLP != null && (
+            <p className="text-sm font-bold text-emerald-700">
+              {formatCLP(kpis.periodCostCLP)}{' '}
+              <span className="text-xs font-normal text-muted-foreground">costo estimado</span>
+            </p>
+          )}
           icon={Clock}
           iconColor="text-blue-500"
           trend={period === 'mes' ? kpis?.trend : null}
           subtitle={period === 'mes' && kpis?.trend ? 'vs. período anterior' : undefined}
         />
         <KpiCard
-          title="Registros pendientes"
-          value={kpis?.pendingCount ?? 0}
-          icon={AlertTriangle}
-          iconColor="text-amber-500"
-          subtitle="requieren acción"
+          title="Proyección del período"
+          value={formatHoursDecimal(kpis?.projectedHours)}
+          secondaryValue={kpis?.projectedCostCLP != null && (
+            <p className="text-sm font-bold text-indigo-700">
+              {formatCLP(kpis.projectedCostCLP)}{' '}
+              <span className="text-xs font-normal text-muted-foreground">proyectado</span>
+            </p>
+          )}
+          icon={TrendingUp}
+          iconColor="text-indigo-500"
+          subtitle={endLabel ? `estimado al cierre (${endLabel})` : 'estimado al cierre del período'}
         />
         <KpiCard
           title="Aprobados este mes"
