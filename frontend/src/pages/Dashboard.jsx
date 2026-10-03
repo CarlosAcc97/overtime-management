@@ -12,7 +12,7 @@ import { PageLoader } from '@/components/common/LoadingSpinner';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
   Clock, AlertTriangle, CheckCircle, TrendingUp, TrendingDown,
-  DollarSign, AlertOctagon, Users,
+  AlertOctagon, Users,
 } from 'lucide-react';
 import { formatHoursDecimal, formatCLP } from '@/utils/formatters';
 import { useAuth } from '@/context/AuthContext';
@@ -107,12 +107,6 @@ export default function Dashboard() {
     queryKey: ['dashboard-type', period],
     queryFn: () => dashboardService.getByType(period),
     enabled: isJefaturaOrAdmin,
-  });
-
-  const { data: costProj } = useQuery({
-    queryKey: ['dashboard-cost', period],
-    queryFn: () => dashboardService.getCostProjection(period),
-    enabled: isAdmin,
   });
 
   // Meta máxima de horas por período — configurable en Configuración del sistema
@@ -262,22 +256,6 @@ export default function Dashboard() {
                   <p className="text-[11px] text-muted-foreground">Rechazadas</p>
                 </div>
               </div>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Proyección de costo — solo admin */}
-      {isAdmin && costProj && (
-        <Card className="border-blue-100 bg-blue-50">
-          <CardContent className="flex items-center gap-4 p-4">
-            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-blue-100">
-              <DollarSign className="h-6 w-6 text-blue-600" />
-            </div>
-            <div>
-              <p className="text-sm text-muted-foreground">Proyección de costo — {costProj.month}</p>
-              <p className="text-2xl font-bold text-blue-700">{formatCLP(costProj.totalCostCLP)}</p>
-              <p className="text-xs text-muted-foreground">Basado en horas aprobadas + pendientes × tarifa por empleado</p>
             </div>
           </CardContent>
         </Card>
