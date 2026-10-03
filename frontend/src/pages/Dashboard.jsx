@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
-  BarChart, Bar, LineChart, Line, PieChart, Pie, Cell,
+  BarChart, Bar, LineChart, Line, PieChart, Pie, Cell, ComposedChart, Area,
   XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine,
 } from 'recharts';
 import * as dashboardService from '@/services/dashboard.service';
@@ -12,7 +12,7 @@ import { PageLoader } from '@/components/common/LoadingSpinner';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
   Clock, AlertTriangle, CheckCircle, TrendingUp, TrendingDown,
-  AlertOctagon, Users,
+  AlertOctagon, Users, CalendarDays, BarChart3, PieChart as PieIcon,
 } from 'lucide-react';
 import { formatHoursDecimal, formatCLP } from '@/utils/formatters';
 import { useAuth } from '@/context/AuthContext';
@@ -34,43 +34,81 @@ const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4'
 const LINE_COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#ec4899', '#64748b'];
 const TYPE_COLORS = { 'Horas extras': '#3b82f6', 'Super extras': '#f59e0b', 'Especiales': '#ef4444' };
 
+// Acentos de las tarjetas KPI (chip de ícono + barra superior)
+const ACCENTS = {
+  blue:    { chip: 'bg-blue-50 text-blue-600',       bar: 'bg-blue-500' },
+  indigo:  { chip: 'bg-indigo-50 text-indigo-600',   bar: 'bg-indigo-500' },
+  emerald: { chip: 'bg-emerald-50 text-emerald-600', bar: 'bg-emerald-500' },
+  red:     { chip: 'bg-red-50 text-red-600',         bar: 'bg-red-500' },
+  purple:  { chip: 'bg-purple-50 text-purple-600',   bar: 'bg-purple-500' },
+};
+
 // ─── KPI Card ─────────────────────────────────────────────────────────────────
-const KpiCard = ({ title, value, secondaryValue, subtitle, icon: Icon, iconColor = 'text-blue-500', trend }) => (
-  <Card>
-    <CardHeader className="flex flex-row items-center justify-between pb-2">
-      <CardTitle className="text-sm font-medium text-muted-foreground">{title}</CardTitle>
-      <Icon className={`h-4 w-4 ${iconColor}`} />
-    </CardHeader>
-    <CardContent>
-      <p className="text-3xl font-bold">{value}</p>
-      {secondaryValue && <div className="mt-0.5">{secondaryValue}</div>}
-      <div className="flex items-center gap-1 mt-1">
-        {trend !== null && trend !== undefined && (
-          <span className={`text-xs font-medium flex items-center gap-0.5 ${parseFloat(trend) > 0 ? 'text-red-500' : 'text-emerald-500'}`}>
-            {parseFloat(trend) > 0 ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
-            {Math.abs(parseFloat(trend))}%
-          </span>
+const KpiCard = ({ title, value, secondaryValue, subtitle, icon: Icon, accent = 'blue', trend }) => {
+  const a = ACCENTS[accent] ?? ACCENTS.blue;
+  return (
+    <Card className="relative overflow-hidden transition-shadow duration-200 hover:shadow-md">
+      <span className={`absolute inset-x-0 top-0 h-1 ${a.bar}`} />
+      <CardContent className="p-5">
+        <div className="flex items-start justify-between gap-3">
+          <p className="text-sm font-medium text-muted-foreground">{title}</p>
+          <div className={`flex h-10 w-10 items-center justify-center rounded-xl shrink-0 ${a.chip}`}>
+            <Icon className="h-5 w-5" />
+          </div>
+        </div>
+        <p className="mt-2 text-3xl font-bold tracking-tight">{value}</p>
+        {secondaryValue && <div className="mt-1">{secondaryValue}</div>}
+        {(trend != null || subtitle) && (
+          <div className="mt-2 flex items-center gap-2">
+            {trend != null && (
+              <span className={`inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-xs font-semibold ${parseFloat(trend) > 0 ? 'bg-red-50 text-red-600' : 'bg-emerald-50 text-emerald-600'}`}>
+                {parseFloat(trend) > 0 ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
+                {Math.abs(parseFloat(trend))}%
+              </span>
+            )}
+            {subtitle && <p className="text-xs text-muted-foreground">{subtitle}</p>}
+          </div>
         )}
-        {subtitle && <p className="text-xs text-muted-foreground">{subtitle}</p>}
-      </div>
-    </CardContent>
-  </Card>
-);
+      </CardContent>
+    </Card>
+  );
+};
 
 // ─── Tooltip personalizado ────────────────────────────────────────────────────
 const CustomTooltip = ({ active, payload, label }) => {
   if (!active || !payload?.length) return null;
   return (
-    <div className="rounded-lg border bg-white p-3 shadow-lg text-sm">
-      <p className="font-semibold mb-1">{label}</p>
-      {payload.map((p) => (
-        <p key={p.name} style={{ color: p.color }}>
-          {p.name}: <strong>{typeof p.value === 'number' && p.name.toLowerCase().includes('hora') ? p.value.toFixed(1) : p.value}</strong>
-        </p>
-      ))}
+    <div className="rounded-xl border border-border bg-white p-3 shadow-lg text-sm">
+      <p className="font-semibold mb-1.5">{label}</p>
+      <div className="space-y-0.5">
+        {payload.map((p) => (
+          <p key={p.name} className="flex items-center gap-2">
+            <span className="h-2 w-2 rounded-full shrink-0" style={{ background: p.color }} />
+            <span className="text-muted-foreground">{p.name}:</span>
+            <strong className="ml-auto">
+              {typeof p.value === 'number' ? p.value.toFixed(1) : p.value}
+            </strong>
+          </p>
+        ))}
+      </div>
     </div>
   );
 };
+
+// ─── Encabezado de tarjeta de gráfico ──────────────────────────────────────────
+const ChartHeader = ({ icon: Icon, title, children }) => (
+  <CardHeader className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between space-y-0 pb-4">
+    <CardTitle className="text-base flex items-center gap-2">
+      {Icon && <Icon className="h-4 w-4 text-muted-foreground" />}
+      {title}
+    </CardTitle>
+    {children}
+  </CardHeader>
+);
+
+const EmptyChart = ({ text = 'Sin datos suficientes' }) => (
+  <div className="flex items-center justify-center h-40 text-muted-foreground text-sm">{text}</div>
+);
 
 // ─── Página principal ─────────────────────────────────────────────────────────
 export default function Dashboard() {
@@ -151,12 +189,20 @@ export default function Dashboard() {
     : projEndLabel ? `estimado al cierre (${projEndLabel})`
     : 'estimado al cierre del período';
 
+  // Distribución de horas por estado
+  const dist = [
+    { label: 'Aprobadas',  val: kpis?.approvedHours ?? 0, seg: 'bg-emerald-500', text: 'text-emerald-700', chip: 'bg-emerald-50 text-emerald-600', icon: CheckCircle },
+    { label: 'Pendientes', val: kpis?.pendingHours  ?? 0, seg: 'bg-amber-400',   text: 'text-amber-700',   chip: 'bg-amber-50 text-amber-600',     icon: AlertTriangle },
+    { label: 'Rechazadas', val: kpis?.rejectedHours ?? 0, seg: 'bg-red-500',     text: 'text-red-700',     chip: 'bg-red-50 text-red-600',         icon: TrendingDown },
+  ];
+  const distTotal = dist.reduce((s, d) => s + d.val, 0);
+
   return (
     <div className="space-y-6">
-      {/* Header */}
+      {/* ── Encabezado ──────────────────────────────────────────────────────── */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold">Dashboard</h1>
+          <h1 className="text-2xl font-bold tracking-tight">Dashboard</h1>
           <p className="text-muted-foreground text-sm mt-0.5">
             Bienvenido/a, {user?.firstName}.{' '}
             {period === 'mes' && kpis?.currentPeriodLabel ? (
@@ -173,7 +219,8 @@ export default function Dashboard() {
           </p>
         </div>
         <Select value={period} onValueChange={setPeriod}>
-          <SelectTrigger className="w-[160px]">
+          <SelectTrigger className="w-[170px] gap-2">
+            <CalendarDays className="h-4 w-4 text-muted-foreground shrink-0" />
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -184,7 +231,7 @@ export default function Dashboard() {
         </Select>
       </div>
 
-      {/* KPIs */}
+      {/* ── KPIs ────────────────────────────────────────────────────────────── */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <KpiCard
           title={`Horas — ${PERIOD_LABELS[period]}`}
@@ -196,7 +243,7 @@ export default function Dashboard() {
             </p>
           )}
           icon={Clock}
-          iconColor="text-blue-500"
+          accent="blue"
           trend={period === 'mes' ? kpis?.trend : null}
           subtitle={period === 'mes' && kpis?.trend ? 'vs. período anterior' : undefined}
         />
@@ -212,90 +259,97 @@ export default function Dashboard() {
             </p>
           )}
           icon={TrendingUp}
-          iconColor="text-indigo-500"
+          accent="indigo"
           subtitle={projectionSubtitle}
         />
         <KpiCard
           title="Aprobados este mes"
           value={kpis?.approvedMonth ?? 0}
           icon={CheckCircle}
-          iconColor="text-emerald-500"
+          accent="emerald"
           subtitle={`${approvalRate}% tasa de aprobación`}
         />
         <KpiCard
           title={isAdmin ? 'Registros retenidos' : 'Con alertas'}
           value={isAdmin ? (kpis?.retainedCount ?? 0) : (kpis?.alertsCount ?? 0)}
-          icon={isAdmin ? AlertOctagon : TrendingUp}
-          iconColor={isAdmin ? 'text-red-500' : 'text-purple-500'}
+          icon={isAdmin ? AlertOctagon : AlertTriangle}
+          accent={isAdmin ? 'red' : 'purple'}
           subtitle={isAdmin ? 'exceden límite mensual' : 'este mes'}
         />
       </div>
 
-      {/* Distribución de horas por estado */}
-      {kpis && (kpis.approvedHours > 0 || kpis.pendingHours > 0 || kpis.rejectedHours > 0) && (
+      {/* ── Distribución de horas por estado ────────────────────────────────── */}
+      {distTotal > 0 && (
         <Card>
-          <CardContent className="p-4">
-            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-3">
-              Distribución de horas — {PERIOD_LABELS[period]}
-            </p>
-            <div className="grid grid-cols-3 gap-3">
-              <div className="flex items-center gap-2.5">
-                <div className="h-8 w-8 flex items-center justify-center rounded-full bg-emerald-100 shrink-0">
-                  <CheckCircle className="h-4 w-4 text-emerald-600" />
+          <CardContent className="p-5">
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                Distribución de horas — {PERIOD_LABELS[period]}
+              </p>
+              <p className="text-xs text-muted-foreground">{formatHoursDecimal(distTotal)} totales</p>
+            </div>
+            {/* Barra proporcional */}
+            <div className="flex h-2.5 w-full overflow-hidden rounded-full bg-gray-100">
+              {dist.map((d) => d.val > 0 && (
+                <div
+                  key={d.label}
+                  className={`${d.seg} transition-all`}
+                  style={{ width: `${(d.val / distTotal) * 100}%` }}
+                  title={`${d.label}: ${formatHoursDecimal(d.val)}`}
+                />
+              ))}
+            </div>
+            {/* Detalle */}
+            <div className="mt-4 grid grid-cols-3 gap-3">
+              {dist.map((d) => (
+                <div key={d.label} className="flex items-center gap-2.5">
+                  <div className={`h-9 w-9 flex items-center justify-center rounded-xl shrink-0 ${d.chip}`}>
+                    <d.icon className="h-4 w-4" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className={`text-lg font-bold leading-tight ${d.text}`}>{formatHoursDecimal(d.val)}</p>
+                    <p className="text-[11px] text-muted-foreground">
+                      {d.label} · {distTotal > 0 ? Math.round((d.val / distTotal) * 100) : 0}%
+                    </p>
+                  </div>
                 </div>
-                <div>
-                  <p className="text-lg font-bold text-emerald-700">{formatHoursDecimal(kpis.approvedHours)}</p>
-                  <p className="text-[11px] text-muted-foreground">Aprobadas</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-2.5">
-                <div className="h-8 w-8 flex items-center justify-center rounded-full bg-amber-100 shrink-0">
-                  <AlertTriangle className="h-4 w-4 text-amber-600" />
-                </div>
-                <div>
-                  <p className="text-lg font-bold text-amber-700">{formatHoursDecimal(kpis.pendingHours)}</p>
-                  <p className="text-[11px] text-muted-foreground">Pendientes</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-2.5">
-                <div className="h-8 w-8 flex items-center justify-center rounded-full bg-red-100 shrink-0">
-                  <TrendingDown className="h-4 w-4 text-red-600" />
-                </div>
-                <div>
-                  <p className="text-lg font-bold text-red-700">{formatHoursDecimal(kpis.rejectedHours)}</p>
-                  <p className="text-[11px] text-muted-foreground">Rechazadas</p>
-                </div>
-              </div>
+              ))}
             </div>
           </CardContent>
         </Card>
       )}
 
-      {/* Gráficos — solo jefatura y admin */}
+      {/* ── Gráficos — solo jefatura y admin ────────────────────────────────── */}
       {isJefaturaOrAdmin && (
         <>
-          {/* Tendencia por período */}
+          {/* Tendencia por período (área degradada) */}
           <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0">
-              <CardTitle className="text-base">{TREND_TITLES[period]}</CardTitle>
+            <ChartHeader title={TREND_TITLES[period]}>
               {maxPeriodHours > 0 && (
                 <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
                   <span className="inline-block h-0 w-5 border-t-2 border-dashed border-red-500" />
                   Máximo {formatHoursDecimal(maxPeriodHours)} por período
                 </span>
               )}
-            </CardHeader>
+            </ChartHeader>
             <CardContent>
               {trend.length === 0 ? (
-                <div className="flex items-center justify-center h-32 text-muted-foreground text-sm">Sin datos suficientes</div>
+                <EmptyChart />
               ) : (
-                <ResponsiveContainer width="100%" height={220}>
-                  <LineChart data={trend} margin={{ top: 15, right: 20, left: 0, bottom: 5 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                    <XAxis dataKey="month" tick={{ fontSize: 11 }} />
-                    {/* El dominio incluye la meta para que la línea siempre sea visible */}
+                <ResponsiveContainer width="100%" height={240}>
+                  <ComposedChart data={trend} margin={{ top: 15, right: 20, left: 0, bottom: 5 }}>
+                    <defs>
+                      <linearGradient id="gradHoras" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.28} />
+                        <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" vertical={false} />
+                    <XAxis dataKey="month" tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
                     <YAxis
                       tick={{ fontSize: 11 }}
+                      axisLine={false}
+                      tickLine={false}
                       domain={[0, (dataMax) => Math.ceil(Math.max(dataMax, maxPeriodHours) * 1.1)]}
                       allowDecimals={false}
                     />
@@ -317,9 +371,9 @@ export default function Dashboard() {
                         }}
                       />
                     )}
-                    <Line type="monotone" dataKey="horas" name="Horas" stroke="#3b82f6" strokeWidth={2} dot={{ r: 4 }} />
+                    <Area type="monotone" dataKey="horas" name="Horas" stroke="#3b82f6" strokeWidth={2.5} fill="url(#gradHoras)" dot={{ r: 3 }} activeDot={{ r: 5 }} />
                     <Line type="monotone" dataKey="aprobados" name="Aprobados" stroke="#10b981" strokeWidth={2} strokeDasharray="5 5" dot={{ r: 3 }} />
-                  </LineChart>
+                  </ComposedChart>
                 </ResponsiveContainer>
               )}
             </CardContent>
@@ -327,10 +381,9 @@ export default function Dashboard() {
 
           {/* Evolución por grupo (centro de costo o departamento) */}
           <Card>
-            <CardHeader className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between space-y-0">
-              <CardTitle className="text-base">
-                Evolución por {trendGroupBy === 'department' ? 'departamento' : 'centro de costo'}
-              </CardTitle>
+            <ChartHeader
+              title={`Evolución por ${trendGroupBy === 'department' ? 'departamento' : 'centro de costo'}`}
+            >
               <Select value={trendGroupBy} onValueChange={setTrendGroupBy}>
                 <SelectTrigger className="w-[190px] h-8 text-xs">
                   <SelectValue />
@@ -340,16 +393,16 @@ export default function Dashboard() {
                   <SelectItem value="department">Por departamento</SelectItem>
                 </SelectContent>
               </Select>
-            </CardHeader>
+            </ChartHeader>
             <CardContent>
               {trendBy.length === 0 || trendByGroups.length === 0 ? (
-                <div className="flex items-center justify-center h-32 text-muted-foreground text-sm">Sin datos suficientes</div>
+                <EmptyChart />
               ) : (
                 <ResponsiveContainer width="100%" height={260}>
                   <LineChart data={trendBy} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                    <XAxis dataKey="month" tick={{ fontSize: 11 }} />
-                    <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
+                    <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" vertical={false} />
+                    <XAxis dataKey="month" tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
+                    <YAxis tick={{ fontSize: 11 }} axisLine={false} tickLine={false} allowDecimals={false} />
                     <Tooltip content={<CustomTooltip />} />
                     <Legend wrapperStyle={{ fontSize: 11 }} />
                     {trendByGroups.map((g, i) => (
@@ -361,6 +414,7 @@ export default function Dashboard() {
                         stroke={LINE_COLORS[i % LINE_COLORS.length]}
                         strokeWidth={2}
                         dot={{ r: 3 }}
+                        activeDot={{ r: 5 }}
                       />
                     ))}
                   </LineChart>
@@ -372,20 +426,24 @@ export default function Dashboard() {
           <div className="grid gap-4 lg:grid-cols-2">
             {/* Horas por centro de costo */}
             <Card>
-              <CardHeader>
-                <CardTitle className="text-base">Horas por tipo de trabajo — mes actual</CardTitle>
-              </CardHeader>
+              <ChartHeader icon={BarChart3} title={`Horas por tipo de trabajo — ${PERIOD_LABELS[period]}`} />
               <CardContent>
                 {byCostCenter.length === 0 ? (
-                  <div className="flex items-center justify-center h-32 text-muted-foreground text-sm">Sin datos este mes</div>
+                  <EmptyChart text="Sin datos en el período" />
                 ) : (
                   <ResponsiveContainer width="100%" height={220}>
                     <BarChart data={byCostCenter} layout="vertical" margin={{ left: 20, right: 20 }}>
+                      <defs>
+                        <linearGradient id="gradBar" x1="0" y1="0" x2="1" y2="0">
+                          <stop offset="0%" stopColor="#60a5fa" />
+                          <stop offset="100%" stopColor="#3b82f6" />
+                        </linearGradient>
+                      </defs>
                       <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" horizontal={false} />
-                      <XAxis type="number" tick={{ fontSize: 11 }} />
-                      <YAxis dataKey="name" type="category" tick={{ fontSize: 11 }} width={100} />
-                      <Tooltip content={<CustomTooltip />} />
-                      <Bar dataKey="horas" name="Horas" fill="#3b82f6" radius={[0, 4, 4, 0]} />
+                      <XAxis type="number" tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
+                      <YAxis dataKey="name" type="category" tick={{ fontSize: 11 }} width={100} axisLine={false} tickLine={false} />
+                      <Tooltip content={<CustomTooltip />} cursor={{ fill: '#f8fafc' }} />
+                      <Bar dataKey="horas" name="Horas" fill="url(#gradBar)" radius={[0, 6, 6, 0]} barSize={22} />
                     </BarChart>
                   </ResponsiveContainer>
                 )}
@@ -394,17 +452,15 @@ export default function Dashboard() {
 
             {/* Distribución por tipo de hora */}
             <Card>
-              <CardHeader>
-                <CardTitle className="text-base">Distribución por tipo — mes actual</CardTitle>
-              </CardHeader>
+              <ChartHeader icon={PieIcon} title={`Distribución por tipo — ${PERIOD_LABELS[period]}`} />
               <CardContent>
                 {byType.length === 0 ? (
-                  <div className="flex items-center justify-center h-32 text-muted-foreground text-sm">Sin datos este mes</div>
+                  <EmptyChart text="Sin datos en el período" />
                 ) : (
                   <div className="flex items-center gap-4">
-                    <ResponsiveContainer width="60%" height={200}>
+                    <ResponsiveContainer width="55%" height={200}>
                       <PieChart>
-                        <Pie data={byType} dataKey="horas" nameKey="name" cx="50%" cy="50%" outerRadius={80} label={({ percent }) => `${(percent * 100).toFixed(0)}%`} labelLine={false}>
+                        <Pie data={byType} dataKey="horas" nameKey="name" cx="50%" cy="50%" innerRadius={48} outerRadius={80} paddingAngle={2} label={({ percent }) => `${(percent * 100).toFixed(0)}%`} labelLine={false}>
                           {byType.map((entry, i) => (
                             <Cell key={entry.name} fill={TYPE_COLORS[entry.name] ?? COLORS[i % COLORS.length]} />
                           ))}
@@ -412,7 +468,7 @@ export default function Dashboard() {
                         <Tooltip formatter={(v) => [`${v.toFixed(1)} hrs`, 'Horas']} />
                       </PieChart>
                     </ResponsiveContainer>
-                    <div className="flex flex-col gap-2 flex-1">
+                    <div className="flex flex-col gap-2.5 flex-1">
                       {byType.map((t, i) => (
                         <div key={t.name} className="flex items-center gap-2">
                           <div className="h-3 w-3 rounded-full shrink-0" style={{ background: TYPE_COLORS[t.name] ?? COLORS[i % COLORS.length] }} />
@@ -431,32 +487,30 @@ export default function Dashboard() {
 
           {/* Top empleados */}
           <Card>
-            <CardHeader>
-              <CardTitle className="text-base flex items-center gap-2">
-                <Users className="h-4 w-4" /> Top empleados por horas — mes actual
-              </CardTitle>
-            </CardHeader>
+            <ChartHeader icon={Users} title={`Top empleados por horas — ${PERIOD_LABELS[period]}`} />
             <CardContent>
               {topEmployees.length === 0 ? (
-                <div className="flex items-center justify-center h-20 text-muted-foreground text-sm">Sin datos este mes</div>
+                <EmptyChart text="Sin datos en el período" />
               ) : (
-                <div className="space-y-2">
+                <div className="space-y-3">
                   {topEmployees.map((emp, i) => (
                     <div key={emp.name} className="flex items-center gap-3">
-                      <span className="text-xs font-bold text-muted-foreground w-5 text-right">{i + 1}</span>
+                      <span className={`flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold shrink-0 ${i === 0 ? 'bg-amber-100 text-amber-700' : i === 1 ? 'bg-slate-100 text-slate-600' : i === 2 ? 'bg-orange-100 text-orange-700' : 'bg-gray-50 text-muted-foreground'}`}>
+                        {i + 1}
+                      </span>
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-center justify-between mb-0.5">
+                        <div className="flex items-center justify-between mb-1">
                           <span className="text-sm font-medium truncate">{emp.name}</span>
                           <div className="flex items-center gap-2 shrink-0 ml-2">
                             {emp.alertas > 0 && (
                               <Badge variant="warning" className="text-[10px] py-0">{emp.alertas} alertas</Badge>
                             )}
-                            <span className="text-sm font-bold">{emp.horas.toFixed(1)} hrs</span>
+                            <span className="text-sm font-bold tabular-nums">{emp.horas.toFixed(1)} hrs</span>
                           </div>
                         </div>
-                        <div className="h-1.5 rounded-full bg-gray-100 overflow-hidden">
+                        <div className="h-2 rounded-full bg-gray-100 overflow-hidden">
                           <div
-                            className="h-full rounded-full bg-blue-500 transition-all"
+                            className="h-full rounded-full bg-gradient-to-r from-blue-400 to-blue-600 transition-all"
                             style={{ width: `${Math.min(100, (emp.horas / (topEmployees[0]?.horas || 1)) * 100)}%` }}
                           />
                         </div>
@@ -470,11 +524,11 @@ export default function Dashboard() {
         </>
       )}
 
-      {/* Funcionario: vista simplificada */}
+      {/* ── Funcionario: vista simplificada ─────────────────────────────────── */}
       {!isJefaturaOrAdmin && (
         <Card>
           <CardHeader>
-            <CardTitle className="text-sm text-muted-foreground">Tu actividad este mes</CardTitle>
+            <CardTitle className="text-sm text-muted-foreground">Tu actividad — {PERIOD_LABELS[period]}</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-2 gap-4">
