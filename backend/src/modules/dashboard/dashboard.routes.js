@@ -54,11 +54,16 @@ function billingPeriodsList(period = 'mes') {
   const curStart = currentBillingStart();
   const addM     = (d, n) => new Date(d.getFullYear(), d.getMonth() + n, d.getDate());
 
-  const buildPeriod = (startDate, isLast) => ({
-    label: startDate.toLocaleDateString('es-CL', { month: 'short', year: '2-digit' }),
-    start: startDate.toISOString().slice(0, 10),
-    end:   (isLast ? today : new Date(startDate.getFullYear(), startDate.getMonth() + 1, 20)).toISOString().slice(0, 10),
-  });
+  const buildPeriod = (startDate, isLast) => {
+    // El período va del 21 de startDate al 20 del mes siguiente; se etiqueta
+    // con el mes de término (el mes siguiente al de inicio).
+    const labelDate = new Date(startDate.getFullYear(), startDate.getMonth() + 1, 1);
+    return {
+      label: labelDate.toLocaleDateString('es-CL', { month: 'short', year: '2-digit' }),
+      start: startDate.toISOString().slice(0, 10),
+      end:   (isLast ? today : new Date(startDate.getFullYear(), startDate.getMonth() + 1, 20)).toISOString().slice(0, 10),
+    };
+  };
 
   if (period === 'mes') {
     return Array.from({ length: 6 }, (_, i) => buildPeriod(addM(curStart, -(5 - i)), i === 5));
