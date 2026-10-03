@@ -135,7 +135,17 @@ export default function Dashboard() {
   // Formato corto de fecha para el rango del período (ej. "21 jun")
   const fmtShort = (iso) =>
     iso ? new Date(iso + 'T12:00:00').toLocaleDateString('es-CL', { day: 'numeric', month: 'short' }) : '';
-  const endLabel = fmtShort(kpis?.currentPeriodEnd);
+  const endLabel     = fmtShort(kpis?.currentPeriodEnd);
+  const projEndLabel = fmtShort(kpis?.projectionEnd);
+
+  const projectionTitle =
+    period === 'anio' ? 'Proyección anual'
+    : period === 'historico' ? 'Total histórico'
+    : 'Proyección del período';
+  const projectionSubtitle =
+    period === 'historico' ? 'acumulado, sin proyección'
+    : projEndLabel ? `estimado al cierre (${projEndLabel})`
+    : 'estimado al cierre del período';
 
   return (
     <div className="space-y-6">
@@ -187,17 +197,19 @@ export default function Dashboard() {
           subtitle={period === 'mes' && kpis?.trend ? 'vs. período anterior' : undefined}
         />
         <KpiCard
-          title="Proyección del período"
+          title={projectionTitle}
           value={formatHoursDecimal(kpis?.projectedHours)}
           secondaryValue={kpis?.projectedCostCLP != null && (
             <p className="text-sm font-bold text-indigo-700">
               {formatCLP(kpis.projectedCostCLP)}{' '}
-              <span className="text-xs font-normal text-muted-foreground">proyectado</span>
+              <span className="text-xs font-normal text-muted-foreground">
+                {period === 'historico' ? 'acumulado' : 'proyectado'}
+              </span>
             </p>
           )}
           icon={TrendingUp}
           iconColor="text-indigo-500"
-          subtitle={endLabel ? `estimado al cierre (${endLabel})` : 'estimado al cierre del período'}
+          subtitle={projectionSubtitle}
         />
         <KpiCard
           title="Aprobados este mes"

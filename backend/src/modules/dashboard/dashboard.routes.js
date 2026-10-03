@@ -203,36 +203,42 @@ router.get('/kpis', anyRole, async (req, res) => {
   let periodCost = 0;
   for (const r of costRows) periodCost += parseFloat(r.weighted) * (rateMap[r.userId] ?? 5000);
 
-  // ── Proyección del período EN CURSO (ciclo 21→20), proporcional por días ────
+  // ── Fechas base ─────────────────────────────────────────────────────────────
   const now         = new Date();
   const curStartStr = curStart.toISOString().slice(0, 10);
-  const todayStr    = now.toISOString().slice(0, 10);
+  const MS_DAY      = 86400000;
 
-  const curRows = await db.select({
-    userId:   overtimeRecords.userId,
-    hours:    sql`COALESCE(SUM(hours_calculated),0)`,
-    weighted: sql`COALESCE(SUM(hours_calculated * factor),0)`,
-  }).from(overtimeRecords)
-    .where(addScope(gte(overtimeRecords.date, curStartStr), lte(overtimeRecords.date, todayStr), exclude))
-    .groupBy(overtimeRecords.userId);
+  // Período de facturación en curso (encabezado): se rotula por su mes de término
+  const curPeriodEnd = new Date(curStart.getFullYear(), curStart.getMonth() + 1, 20);
+  const labelDate    = new Date(curStart.getFullYear(), curStart.getMonth() + 1, 1);
+  const currentPeriodLabel = labelDate.toLocaleDateString('es-CL', { month: 'long', year: 'numeric' });
 
-  let curH = 0, curCost = 0;
-  for (const r of curRows) {
-    curH    += parseFloat(r.hours);
-    curCost += parseFloat(r.weighted) * (rateMap[r.userId] ?? 5000);
+  // ── Proyección proporcional según el período SELECCIONADO ───────────────────
+  //   mes  → al cierre del período en curso (20 del mes siguiente)
+  //   anio → al cierre del año fiscal (20 de diciembre)
+  //   histórico → sin proyección (se muestra el total acumulado)
+  let projStart = null, projFullEnd = null;
+  if (period === 'mes') {
+    projStart   = curStart;
+    projFullEnd = curPeriodEnd;
+  } else if (period === 'anio' && start) {
+    projStart   = new Date(start + 'T00:00:00');
+    projFullEnd = new Date(projStart.getFullYear(), 11, 20);                  // 20-dic
+    if (projFullEnd <= projStart) projFullEnd = new Date(projStart.getFullYear() + 1, 11, 20);
   }
 
-  const periodEndFull = new Date(curStart.getFullYear(), curStart.getMonth() + 1, 20);
-  const MS_DAY        = 86400000;
-  const daysElapsed   = Math.max(1, Math.floor((now - curStart) / MS_DAY) + 1);
-  const totalDays     = Math.floor((periodEndFull - curStart) / MS_DAY) + 1;
-  const factorProj    = daysElapsed >= totalDays ? 1 : totalDays / daysElapsed;
-  const projectedHours   = curH * factorProj;
-  const projectedCostCLP = curCost * factorProj;
-
-  // Etiqueta del período en curso: mes de término (el mes siguiente al inicio)
-  const labelDate = new Date(curStart.getFullYear(), curStart.getMonth() + 1, 1);
-  const currentPeriodLabel = labelDate.toLocaleDateString('es-CL', { month: 'long', year: 'numeric' });
+  const elapsedHours   = parseFloat(totalPeriod?.h ?? 0);
+  let projectedHours   = elapsedHours;
+  let projectedCostCLP = periodCost;
+  let projectionEnd    = null;
+  if (projStart) {
+    const daysElapsed = Math.max(1, Math.floor((now - projStart) / MS_DAY) + 1);
+    const totalDays   = Math.floor((projFullEnd - projStart) / MS_DAY) + 1;
+    const factorProj  = daysElapsed >= totalDays ? 1 : totalDays / daysElapsed;
+    projectedHours    = elapsedHours * factorProj;
+    projectedCostCLP  = periodCost * factorProj;
+    projectionEnd     = projFullEnd.toISOString().slice(0, 10);
+  }
 
   ok(res, {
     monthHours:    parseFloat(totalPeriod?.h ?? 0),
@@ -244,11 +250,10 @@ router.get('/kpis', anyRole, async (req, res) => {
     periodCostCLP:      Math.round(periodCost),
     projectedHours:     parseFloat(projectedHours.toFixed(1)),
     projectedCostCLP:   Math.round(projectedCostCLP),
+    projectionEnd,
     currentPeriodLabel,
     currentPeriodStart: curStartStr,
-    currentPeriodEnd:   periodEndFull.toISOString().slice(0, 10),
-    periodDaysElapsed:  daysElapsed,
-    periodTotalDays:    totalDays,
+    currentPeriodEnd:   curPeriodEnd.toISOString().slice(0, 10),
     pendingCount:  Number(pending?.count ?? 0),
     approvedMonth: Number(approved?.count ?? 0),
     retainedCount: Number(retained?.count ?? 0),
