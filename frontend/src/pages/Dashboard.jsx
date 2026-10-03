@@ -31,6 +31,7 @@ const TREND_TITLES = {
 
 // ─── Colores consistentes ─────────────────────────────────────────────────────
 const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4'];
+const LINE_COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#ec4899', '#64748b'];
 const TYPE_COLORS = { 'Horas extras': '#3b82f6', 'Super extras': '#f59e0b', 'Especiales': '#ef4444' };
 
 // ─── KPI Card ─────────────────────────────────────────────────────────────────
@@ -78,6 +79,7 @@ export default function Dashboard() {
   const isJefaturaOrAdmin = ['jefatura', 'administrador'].includes(user?.role);
 
   const [period, setPeriod] = useState('mes');
+  const [trendGroupBy, setTrendGroupBy] = useState('costCenter');
 
   const { data: kpis, isLoading: kpisLoading } = useQuery({
     queryKey: ['dashboard-kpis', period],
@@ -108,6 +110,14 @@ export default function Dashboard() {
     queryFn: () => dashboardService.getByType(period),
     enabled: isJefaturaOrAdmin,
   });
+
+  const { data: trendBySeries } = useQuery({
+    queryKey: ['dashboard-trend-by', period, trendGroupBy],
+    queryFn: () => dashboardService.getTrendBy(period, trendGroupBy),
+    enabled: isJefaturaOrAdmin,
+  });
+  const trendBy       = trendBySeries?.trend  ?? [];
+  const trendByGroups = trendBySeries?.groups ?? [];
 
   // Meta máxima de horas por período — configurable en Configuración del sistema
   const { data: sysConfig } = useQuery({
@@ -309,6 +319,50 @@ export default function Dashboard() {
                     )}
                     <Line type="monotone" dataKey="horas" name="Horas" stroke="#3b82f6" strokeWidth={2} dot={{ r: 4 }} />
                     <Line type="monotone" dataKey="aprobados" name="Aprobados" stroke="#10b981" strokeWidth={2} strokeDasharray="5 5" dot={{ r: 3 }} />
+                  </LineChart>
+                </ResponsiveContainer>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Evolución por grupo (centro de costo o departamento) */}
+          <Card>
+            <CardHeader className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between space-y-0">
+              <CardTitle className="text-base">
+                Evolución por {trendGroupBy === 'department' ? 'departamento' : 'centro de costo'}
+              </CardTitle>
+              <Select value={trendGroupBy} onValueChange={setTrendGroupBy}>
+                <SelectTrigger className="w-[190px] h-8 text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="costCenter">Por centro de costo</SelectItem>
+                  <SelectItem value="department">Por departamento</SelectItem>
+                </SelectContent>
+              </Select>
+            </CardHeader>
+            <CardContent>
+              {trendBy.length === 0 || trendByGroups.length === 0 ? (
+                <div className="flex items-center justify-center h-32 text-muted-foreground text-sm">Sin datos suficientes</div>
+              ) : (
+                <ResponsiveContainer width="100%" height={260}>
+                  <LineChart data={trendBy} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                    <XAxis dataKey="month" tick={{ fontSize: 11 }} />
+                    <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
+                    <Tooltip content={<CustomTooltip />} />
+                    <Legend wrapperStyle={{ fontSize: 11 }} />
+                    {trendByGroups.map((g, i) => (
+                      <Line
+                        key={g.key}
+                        type="monotone"
+                        dataKey={g.key}
+                        name={g.label}
+                        stroke={LINE_COLORS[i % LINE_COLORS.length]}
+                        strokeWidth={2}
+                        dot={{ r: 3 }}
+                      />
+                    ))}
                   </LineChart>
                 </ResponsiveContainer>
               )}

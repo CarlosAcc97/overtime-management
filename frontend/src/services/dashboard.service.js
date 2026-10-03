@@ -15,6 +15,11 @@ export const getByCostCenter = async (period = 'mes') => {
   return data.data.byCostCenter;
 };
 
+export const getTrendBy = async (period = 'mes', groupBy = 'costCenter') => {
+  const { data } = await api.get('/dashboard/trend-by', { params: { period, groupBy } });
+  return data.data; // { trend, groups }
+};
+
 export const getTopEmployees = async (period = 'mes') => {
   const { data } = await api.get('/dashboard/top-employees', { params: { period } });
   return data.data.topEmployees;

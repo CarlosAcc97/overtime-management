@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { db } from '../../config/database.js';
-import { overtimeRecords, users, costCenters } from '../../db/schema.js';
+import { overtimeRecords, users, costCenters, departments } from '../../db/schema.js';
 import { eq, and, gte, lte, notInArray, desc, sql, inArray } from 'drizzle-orm';
 import { ok } from '../../utils/response.js';
 import { authenticate } from '../../middleware/authenticate.js';
@@ -291,6 +291,70 @@ router.get('/monthly-trend', onlyJefaturaOrAdmin, async (req, res) => {
   }
 
   ok(res, { trend: data });
+});
+
+// ─── Tendencia multi-serie por grupo (centro de costo o departamento) ──────────
+router.get('/trend-by', onlyJefaturaOrAdmin, async (req, res) => {
+  const { id: userId, role } = req.user;
+  const period     = req.query.period || 'mes';
+  const groupBy    = req.query.groupBy === 'department' ? 'department' : 'costCenter';
+  const teamFilter = await getUserScope(userId, role);
+  const periods    = billingPeriodsList(period);
+  const exclude    = notInArray(overtimeRecords.status, [STATUS.RECHAZADO, STATUS.ANULADO]);
+
+  // Catálogo de etiquetas del grupo elegido
+  const labelMap = {};
+  if (groupBy === 'department') {
+    const rows = await db.select({ id: departments.id, name: departments.name }).from(departments);
+    for (const d of rows) labelMap[d.id] = d.name;
+  } else {
+    const rows = await db.select({ id: costCenters.id, name: costCenters.name }).from(costCenters);
+    for (const c of rows) labelMap[c.id] = c.name;
+  }
+
+  // Acumular horas por período y grupo — consultas secuenciales (Turso)
+  const periodRows  = [];
+  const groupTotals = {};
+  for (const p of periods) {
+    const base  = and(gte(overtimeRecords.date, p.start), lte(overtimeRecords.date, p.end), exclude);
+    const where = teamFilter.length ? and(...teamFilter, base) : base;
+
+    const rows = groupBy === 'department'
+      ? await db.select({ g: users.departmentId, hours: sql`COALESCE(SUM(hours_calculated),0)` })
+          .from(overtimeRecords)
+          .innerJoin(users, eq(overtimeRecords.userId, users.id))
+          .where(where).groupBy(users.departmentId)
+      : await db.select({ g: overtimeRecords.costCenterId, hours: sql`COALESCE(SUM(hours_calculated),0)` })
+          .from(overtimeRecords)
+          .where(where).groupBy(overtimeRecords.costCenterId);
+
+    const data = {};
+    for (const r of rows) {
+      if (r.g == null) continue; // registros sin grupo asignado
+      const h = parseFloat(r.hours);
+      data[r.g] = h;
+      groupTotals[r.g] = (groupTotals[r.g] ?? 0) + h;
+    }
+    periodRows.push({ month: p.label, data });
+  }
+
+  // Grupos con datos, ordenados por total; máximo 8 para mantener legible el gráfico
+  const groups = Object.keys(groupTotals)
+    .filter(id => groupTotals[id] > 0)
+    .sort((a, b) => groupTotals[b] - groupTotals[a])
+    .slice(0, 8)
+    .map(id => ({ key: `g${id}`, label: labelMap[id] ?? `#${id}` }));
+
+  const trend = periodRows.map(pr => {
+    const row = { month: pr.month };
+    for (const g of groups) {
+      const id = g.key.slice(1);
+      row[g.key] = parseFloat((pr.data[id] ?? 0).toFixed(1));
+    }
+    return row;
+  });
+
+  ok(res, { trend, groups });
 });
 
 // ─── Horas por centro de costo ────────────────────────────────────────────────
